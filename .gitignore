@@ -1,0 +1,53 @@
+# Environment variables and secrets
+.env
+secrets/
+*.key
+*.pem
+*.secret
+
+# Java and Maven build artifacts
+target/
+*.jar
+*.war
+*.class
+.mvn/
+mvnw
+mvnw.cmd
+pom.xml.versionsBackup
+pom.xml.releaseBackup
+release.properties
+
+# Spring Boot specific
+*.log
+*.lck
+*.pid
+spring.log
+
+# Docker
+Dockerfile*.bak
+docker-compose*.yml.bak
+*.dockerignore
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.code-workspace
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Dependency directories
+dependency-reduced-pom.xml
+.classpath
+.project
+.settings/
+bin/
+
+# Local configuration overrides
+application-local.yml
+application-dev.yml
+application-prod.yml

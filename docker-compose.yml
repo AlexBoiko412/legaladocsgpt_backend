@@ -1,6 +1,21 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   api-gateway:
     build:
       context: ./api-gateway
@@ -18,11 +33,16 @@ services:
   auth-service:
     build:
       context: ./auth-service
-      dockerfile: Dockerfile
     ports:
       - "8081:8081"
-    networks:
-      - backend
+    depends_on:
+      postgres:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
 
   document-generator:
     build:
@@ -50,6 +70,9 @@ services:
       - "8084:8084"
     networks:
       - backend
+
+volumes:
+  postgres_data:
 
 networks:
   backend:

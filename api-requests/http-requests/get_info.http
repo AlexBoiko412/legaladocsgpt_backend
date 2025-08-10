@@ -1,0 +1,22 @@
+### Request
+GET http://localhost:8080/api/info
+
+###
+# @name AuthHealthCheck
+GET http://localhost:8080/api/auth/health
+
+
+###
+# @name DocumentsHealthCheck
+GET http://localhost:8080/api/documents/health
+
+
+###
+# @name TemplatesHealthCheck
+GET http://localhost:8080/api/templates/health
+
+
+###
+# @name StorageHealthCheck
+GET http://localhost:8080/api/storage/health
+

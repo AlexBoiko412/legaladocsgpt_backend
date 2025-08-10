@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.legaldocsgpt</groupId>
-    <artifactId>api-gateway</artifactId>
+    <artifactId>storage-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>api-gateway</name>
-    <description>api-gateway</description>
+    <name>storage-service</name>
+    <description>storage-service</description>
     <url/>
     <licenses>
         <license/>
@@ -28,10 +28,12 @@
     </scm>
     <properties>
         <java.version>21</java.version>
-        <spring.boot.version>3.5.4</spring.boot.version>
     </properties>
-
     <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -42,12 +44,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
-            <version>4.3.0</version>
         </dependency>
     </dependencies>
 

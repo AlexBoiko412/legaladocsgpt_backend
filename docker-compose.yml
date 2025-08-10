@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - document-generator
+      - template-service
+      - storage-service
+    networks:
+      - backend
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    networks:
+      - backend
+
+  document-generator:
+    build:
+      context: ./document-generator
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    networks:
+      - backend
+
+  template-service:
+    build:
+      context: ./template-service
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    networks:
+      - backend
+
+  storage-service:
+    build:
+      context: ./storage-service
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge

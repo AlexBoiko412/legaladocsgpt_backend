@@ -1,8 +1,18 @@
 version: "3.9"
 
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+    driver: bridge
+  database:
+    driver: bridge
+
+
 services:
-  postgres:
-    image: postgres:15
+  auth-db:
+    image: postgres:16
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -15,6 +25,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - database
+
+  auth-service:
+    build:
+      context: ./auth-service
+    depends_on:
+      auth-db:
+        condition: service_started
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+    networks:
+      - backend
+      - database
 
   api-gateway:
     build:
@@ -30,19 +60,7 @@ services:
     networks:
       - backend
 
-  auth-service:
-    build:
-      context: ./auth-service
-    ports:
-      - "8081:8081"
-    depends_on:
-      postgres:
-        condition: service_started
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+
 
   document-generator:
     build:
@@ -71,9 +89,3 @@ services:
     networks:
       - backend
 
-volumes:
-  postgres_data:
-
-networks:
-  backend:
-    driver: bridge

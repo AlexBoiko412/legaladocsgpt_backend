@@ -16,6 +16,10 @@ spring:
                 - Path=/api/auth/**
               filters:
                 - StripPrefix=2
+            - id: auth-service-oauth2-callback
+              uri: http://auth-service:8081
+              predicates:
+                - Path=/login/oauth2/code/**
 
             - id: document-generator
               uri: http://document-generator:8082
@@ -37,3 +41,5 @@ spring:
                 - Path=/api/storage/**
               filters:
                 - StripPrefix=2
+jwt:
+  secret: ${JWT_SECRET}

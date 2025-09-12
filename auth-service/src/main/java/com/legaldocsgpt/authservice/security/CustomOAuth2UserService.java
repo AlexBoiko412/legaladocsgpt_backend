@@ -19,13 +19,14 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         OAuth2User oAuth2User = super.loadUser(userRequest);
 
         String email = oAuth2User.getAttribute("email");
-        String sub = oAuth2User.getAttribute("sub"); // унікальний id Google
+        String sub = oAuth2User.getAttribute("sub");
 
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> {
                     User newUser = User.builder()
-                            .username(email.split("@")[0]) // тимчасовий username
+                            .username(email.split("@")[0])
                             .email(email)
+                            .password("")
                             .provider("GOOGLE")
                             .providerId(sub)
                             .role("ROLE_USER")

@@ -39,15 +39,15 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
 
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> userRepository.save(User.builder()
-                        .username(email)
+                        .username(email.split("@")[0])
                         .email(email)
                         .password("")
                         .role("ROLE_USER")
                         .build()));
 
-        String token = jwtUtil.generateToken(user.getUsername());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getEmail(), user.getRole());
 
-        Cookie cookie = new Cookie("auth_token", token);
+        Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         // cookie.setSecure(true);
         cookie.setPath("/");

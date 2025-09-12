@@ -1,12 +1,14 @@
 package com.legaldocsgpt.authservice.service;
 
-import com.legaldocsgpt.authservice.dto.UserInfoResponse;
+import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
 import com.legaldocsgpt.authservice.entity.User;
 import com.legaldocsgpt.authservice.repository.UserRepository;
 import com.legaldocsgpt.authservice.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+
 
 @Service
 @RequiredArgsConstructor
@@ -15,6 +17,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+
 
     public String signup(String email, String username, String password) {
         if (username == null || username.trim().isEmpty()) {
@@ -41,7 +44,7 @@ public class AuthService {
                 .role("ROLE_USER")
                 .build();
         userRepository.save(user);
-        return jwtUtil.generateToken(username);
+        return jwtUtil.generateToken(user.getEmail(), username, user.getRole());
     }
 
     public String login(String username, String email, String password) {
@@ -59,18 +62,28 @@ public class AuthService {
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new RuntimeException("Invalid credentials");
         }
-        return jwtUtil.generateToken(username);
+        return jwtUtil.generateToken(email, username, user.getRole());
     }
 
-    public UserInfoResponse validateTokenAndGetUserInfo(String token) {
-        String username = jwtUtil.validateToken(token);
-        if (username == null) {
+    public UserInfoResponseDto validateTokenAndGetUserInfo(String token) {
+        UserInfoResponseDto userInfo = jwtUtil.validateToken(token);
+        if (userInfo == null) {
             return null;
         }
-        User user = userRepository.findByUsername(username).orElse(null);
+        User user = userRepository.findByEmail(userInfo.getEmail()).orElse(null);
         if (user == null) {
             return null;
         }
-        return new UserInfoResponse(user.getId(), user.getUsername(), user.getRole());
+        return userInfo;
     }
+
+    public UserInfoResponseDto getInfo(String token) {
+        UserInfoResponseDto userInfo = jwtUtil.validateToken(token);
+        if (userInfo == null) {
+            return null;
+        }
+
+        return userInfo;
+    }
+
 }

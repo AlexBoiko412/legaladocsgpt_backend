@@ -48,7 +48,6 @@ public class SecurityConfig {
                                                    CustomOAuth2UserService customOAuth2UserService) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .httpBasic(httpBasic -> httpBasic.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/signup", "/login", "/validate", "/oauth2/**").permitAll()
                         .anyRequest().authenticated()

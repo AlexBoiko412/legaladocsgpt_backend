@@ -46,3 +46,7 @@ jwt:
 logging:
   level:
     org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    com.legaldocsgpt.authservice.service: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"

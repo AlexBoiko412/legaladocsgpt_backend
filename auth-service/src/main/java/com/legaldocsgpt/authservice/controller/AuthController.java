@@ -1,6 +1,6 @@
 package com.legaldocsgpt.authservice.controller;
 
-import com.legaldocsgpt.authservice.dto.UserInfoResponse;
+import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
 import com.legaldocsgpt.authservice.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,14 +43,25 @@ public class AuthController {
     }
 
     @GetMapping("/validate")
-    public ResponseEntity<?> validateToken(@RequestHeader("Authorization") String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+    public ResponseEntity<?> validateToken(@CookieValue(name = "token", required = false) String token) {
+        if (token == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String token = authHeader.replace("Bearer ", "");
-        UserInfoResponse userInfo = authService.validateTokenAndGetUserInfo(token);
+        UserInfoResponseDto userInfo = authService.validateTokenAndGetUserInfo(token);
+        if (userInfo != null) {
+            return ResponseEntity.ok(userInfo);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
 
+    @GetMapping("/me")
+    public ResponseEntity<?> getUserInfo(@CookieValue(name = "token", required = false) String token) {
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        UserInfoResponseDto userInfo = authService.getInfo(token);
         if (userInfo != null) {
             return ResponseEntity.ok(userInfo);
         }

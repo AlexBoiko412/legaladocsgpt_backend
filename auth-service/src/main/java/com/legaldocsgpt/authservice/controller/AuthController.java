@@ -6,12 +6,13 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 
-
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class AuthController {
@@ -21,25 +22,25 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<TokenResponse> signup(@RequestBody AuthRequest request, HttpServletResponse response) {
         String token = authService.signup(request.getUsername(), request.getEmail(), request.getPassword());
-        Cookie cookie = new Cookie("token", token);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(24 * 60 * 60);
-        // cookie.setSecure(true);
-        response.addCookie(cookie);
-        return ResponseEntity.ok(new TokenResponse(token));
+        addTokenCookie(response, token);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@RequestBody AuthRequest request, HttpServletResponse response) {
         String token = authService.login(request.getUsername(), request.getEmail(), request.getPassword());
-        Cookie cookie = new Cookie("token", token);
-        cookie.setHttpOnly(true);
+        addTokenCookie(response, token);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletResponse response) {
+        Cookie cookie = new Cookie("token", null);
         cookie.setPath("/");
-        cookie.setMaxAge(24 * 60 * 60);
-        // cookie.setSecure(true);
+        cookie.setHttpOnly(true);
+        cookie.setMaxAge(0);
         response.addCookie(cookie);
-        return ResponseEntity.ok(new TokenResponse(token));
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/validate")
@@ -48,7 +49,8 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        UserInfoResponseDto userInfo = authService.validateTokenAndGetUserInfo(token);
+
+        UserInfoResponseDto userInfo = authService.validateTokenAndUserInDB(token);
         if (userInfo != null) {
             return ResponseEntity.ok(userInfo);
         }
@@ -57,16 +59,32 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<?> getUserInfo(@CookieValue(name = "token", required = false) String token) {
-        if (token == null) {
+        if (token == null || token.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        UserInfoResponseDto userInfo = authService.getInfo(token);
+        UserInfoResponseDto userInfo = authService.getDecryptedToken(token);
         if (userInfo != null) {
             return ResponseEntity.ok(userInfo);
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
+
+
+    private void addTokenCookie(HttpServletResponse response, String token) {
+        Cookie cookie = new Cookie("token", token);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(24000);
+        //
+        cookie.setSecure(false);
+        //
+        cookie.setAttribute("SameSite", "Strict");
+        response.addCookie(cookie);
+    }
+
+
+
 
     @Data
     public static class AuthRequest {
@@ -77,4 +95,5 @@ public class AuthController {
 
 
     public record TokenResponse(String token) {}
+
 }

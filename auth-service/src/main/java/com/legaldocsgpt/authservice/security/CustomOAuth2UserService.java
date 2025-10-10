@@ -21,7 +21,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String email = oAuth2User.getAttribute("email");
         String sub = oAuth2User.getAttribute("sub");
 
-        User user = userRepository.findByEmail(email)
+        userRepository.findByEmail(email)
                 .orElseGet(() -> {
                     User newUser = User.builder()
                             .username(email.split("@")[0])

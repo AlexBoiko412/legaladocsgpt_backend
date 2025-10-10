@@ -52,10 +52,9 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(3600);
-        cookie.setDomain("localhost"); //
         cookie.setAttribute("SameSite", "Strict");
-
         response.addCookie(cookie);
+
         response.sendRedirect(redirectUri);
     }
 }

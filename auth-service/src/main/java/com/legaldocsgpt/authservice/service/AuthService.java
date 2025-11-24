@@ -65,7 +65,7 @@ public class AuthService {
         return jwtUtil.generateToken(email, username, user.getRole());
     }
 
-    public UserInfoResponseDto validateTokenAndGetUserInfo(String token) {
+    public UserInfoResponseDto validateTokenAndUserInDB(String token) {
         UserInfoResponseDto userInfo = jwtUtil.validateToken(token);
         if (userInfo == null) {
             return null;
@@ -77,7 +77,7 @@ public class AuthService {
         return userInfo;
     }
 
-    public UserInfoResponseDto getInfo(String token) {
+    public UserInfoResponseDto getDecryptedToken(String token) {
         UserInfoResponseDto userInfo = jwtUtil.validateToken(token);
         if (userInfo == null) {
             return null;

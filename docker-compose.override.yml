@@ -1,0 +1,125 @@
+version: "3.9"
+
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+    driver: bridge
+  database:
+    driver: bridge
+
+services:
+  auth-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - database
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./auth-service:/app
+      - ./auth-service/target/classes:/app/target/classes
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      CHOKIDAR_USEPOLLING: true
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+    ports:
+      - "8081:8081"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./api-gateway:/app
+      - ./api-gateway/target/classes:/app/target/classes
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      JWT_SECRET: ${JWT_SECRET}
+      CHOKIDAR_USEPOLLING: true
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - document-generator
+      - template-service
+      - storage-service
+    networks:
+      - backend
+
+  document-generator:
+    build:
+      context: ./document-generator
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./document-generator:/app
+      - ./document-generator/target/classes:/app/target/classes
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      CHOKIDAR_USEPOLLING: true
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+    ports:
+      - "8082:8082"
+    networks:
+      - backend
+
+  template-service:
+    build:
+      context: ./template-service
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./template-service:/app
+      - ./template-service/target/classes:/app/target/classes
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      CHOKIDAR_USEPOLLING: true
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+    ports:
+      - "8083:8083"
+    networks:
+      - backend
+
+  storage-service:
+    build:
+      context: ./storage-service
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./storage-service:/app
+      - ./storage-service/target/classes:/app/target/classes
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      CHOKIDAR_USEPOLLING: true
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+    ports:
+      - "8084:8084"
+    networks:
+      - backend

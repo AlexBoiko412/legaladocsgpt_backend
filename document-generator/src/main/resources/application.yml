@@ -3,3 +3,9 @@ server:
 spring:
   application:
     name: document-generator
+
+ai:
+  provider: openai
+openai:
+  api:
+    key: ${OPENAI_API_KEY}

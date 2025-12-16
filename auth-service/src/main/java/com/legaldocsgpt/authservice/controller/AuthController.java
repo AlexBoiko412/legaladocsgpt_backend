@@ -35,10 +35,13 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
-        Cookie cookie = new Cookie("token", null);
-        cookie.setPath("/");
+        Cookie cookie = new Cookie("token", "");
         cookie.setHttpOnly(true);
+        cookie.setPath("/");
         cookie.setMaxAge(0);
+        cookie.setSecure(false);
+        cookie.setAttribute("SameSite", "Strict");
+
         response.addCookie(cookie);
         return ResponseEntity.ok().build();
     }

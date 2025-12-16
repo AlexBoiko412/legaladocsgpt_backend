@@ -33,6 +33,7 @@ docker-compose*.yml.bak
 *.iml
 *.ipr
 *.iws
+*.md
 .vscode/
 *.code-workspace
 
@@ -51,3 +52,4 @@ bin/
 application-local.yml
 application-dev.yml
 application-prod.yml
+

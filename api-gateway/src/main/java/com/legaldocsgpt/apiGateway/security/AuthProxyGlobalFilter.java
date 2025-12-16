@@ -28,7 +28,11 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
 
-        if (path.startsWith("/api/auth/oauth2/") || path.startsWith("/api/auth/login/")) {
+        if (path.startsWith("/api/auth/oauth2/")
+                || path.startsWith("/api/auth/login")
+                || path.startsWith("/api/auth/logout")
+        ) {
+            log.info(exchange.getRequest().getQueryParams().toString());
             return chain.filter(exchange);
         }
 

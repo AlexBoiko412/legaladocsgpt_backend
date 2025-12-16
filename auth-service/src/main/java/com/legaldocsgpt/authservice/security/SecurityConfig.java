@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -48,8 +49,20 @@ public class SecurityConfig {
                                                    CustomOAuth2UserService customOAuth2UserService) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .formLogin(form -> form.disable())
+                .logout(logout -> logout.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/signup", "/login", "/validate", "/me", "/oauth2/**").permitAll()
+                        .requestMatchers(
+                                "/signup",
+                                "/login",
+                                "/logout",
+                                "/validate",
+                                "/me",
+                                "/oauth2/**")
+                        .permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth -> oauth

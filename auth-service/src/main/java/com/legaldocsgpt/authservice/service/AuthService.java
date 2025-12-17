@@ -2,6 +2,10 @@ package com.legaldocsgpt.authservice.service;
 
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
 import com.legaldocsgpt.authservice.entity.User;
+import com.legaldocsgpt.authservice.exception.InvalidCredentialsException;
+import com.legaldocsgpt.authservice.exception.InvalidInputException;
+import com.legaldocsgpt.authservice.exception.UserAlreadyExistsException;
+import com.legaldocsgpt.authservice.exception.UserNotFoundException;
 import com.legaldocsgpt.authservice.repository.UserRepository;
 import com.legaldocsgpt.authservice.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -19,21 +23,21 @@ public class AuthService {
     private final JwtUtil jwtUtil;
 
 
-    public String signup(String email, String username, String password) {
+    public String signup(String username,  String email, String password) {
         if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username is required");
+            throw new InvalidInputException("Username is required");
         }
-        if (email == null || !email.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
-            throw new IllegalArgumentException("Invalid email format");
+        if (email == null || !email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            throw new InvalidInputException("Invalid email format");
         }
         if (password == null || password.length() < 8) {
-            throw new IllegalArgumentException("Password must be at least 8 characters");
+            throw new InvalidInputException("Password must be at least 8 characters");
         }
         if (userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
+            throw new UserAlreadyExistsException("Username already exists");
         }
         if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Email already exists");
+            throw new UserAlreadyExistsException("Email already exists");
         }
 
 
@@ -44,25 +48,26 @@ public class AuthService {
                 .role("ROLE_USER")
                 .build();
         userRepository.save(user);
-        return jwtUtil.generateToken(user.getEmail(), username, user.getRole());
+        return jwtUtil.generateToken(username, user.getEmail(), user.getRole());
     }
 
     public String login(String username, String email, String password) {
         User user;
-        if(email != null) {
-            user = userRepository.findByUsername(email)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-        } else if(username != null) {
+        if (email != null && !email.isBlank()) {
+            user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+        } else if (username != null && !username.isBlank()) {
             user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new UserNotFoundException("User not found with username: " + username));
         } else {
-            throw new RuntimeException("Invalid username or email");
+            throw new InvalidInputException("Username or email must be provided");
         }
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new RuntimeException("Invalid credentials");
+            throw new InvalidCredentialsException("Invalid credentials");
         }
-        return jwtUtil.generateToken(email, username, user.getRole());
+
+        return jwtUtil.generateToken(user.getUsername(), user.getEmail(), user.getRole());
     }
 
     public UserInfoResponseDto validateTokenAndUserInDB(String token) {

@@ -95,8 +95,4 @@ public class AuthController {
         private String email;
         private String password;
     }
-
-
-    public record TokenResponse(String token) {}
-
 }

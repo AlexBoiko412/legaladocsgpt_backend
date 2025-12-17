@@ -31,8 +31,8 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/api/auth/oauth2/")
                 || path.startsWith("/api/auth/login")
                 || path.startsWith("/api/auth/logout")
+                || path.startsWith("/api/auth/signup")
         ) {
-            log.info(exchange.getRequest().getQueryParams().toString());
             return chain.filter(exchange);
         }
 

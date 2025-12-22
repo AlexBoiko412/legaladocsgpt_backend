@@ -1,4 +1,4 @@
-package com.legaldocsgpt.documentgenerator.dto;
+package com.legaldocsgpt.shared.dto;
 
 
 import lombok.Data;

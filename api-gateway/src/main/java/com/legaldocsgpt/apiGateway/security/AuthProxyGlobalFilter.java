@@ -1,17 +1,23 @@
 package com.legaldocsgpt.apiGateway.security;
 
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -38,8 +44,9 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
 
         var cookie = exchange.getRequest().getCookies().getFirst("token");
         if (cookie == null || cookie.getValue().isEmpty()) {
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
+            if (cookie == null || cookie.getValue().isEmpty()) {
+                return handleUnauthorized(exchange, "Missing or empty authentication token");
+            }
         }
 
         String token = cookie.getValue();
@@ -55,13 +62,12 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
                     if (resp.getStatusCode().is2xxSuccessful()) {
                         return chain.filter(exchange);
                     } else {
-                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                        return exchange.getResponse().setComplete();
+                        return handleUnauthorized(exchange, "Invalid session or token expired");
                     }
                 })
                 .onErrorResume(err -> {
-                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                    return exchange.getResponse().setComplete();
+                    log.error("Error validating token", err);
+                    return handleUnauthorized(exchange, "Invalid session or token expired");
                 });
     }
 
@@ -69,4 +75,30 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
     public int getOrder() {
         return -1;
     }
+
+
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private Mono<Void> handleUnauthorized(ServerWebExchange exchange, String message) {
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        exchange.getResponse().getHeaders().add(HttpHeaders.CONTENT_TYPE, "application/json");
+
+        Map<String, Object> errorDetails = new HashMap<>();
+        errorDetails.put("timestamp", java.time.LocalDateTime.now().toString());
+        errorDetails.put("status", HttpStatus.UNAUTHORIZED.value());
+        errorDetails.put("error", "Unauthorized");
+        errorDetails.put("message", message);
+        errorDetails.put("path", exchange.getRequest().getPath().value());
+
+        try {
+            byte[] bytes = objectMapper.writeValueAsBytes(errorDetails);
+            DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);
+            return exchange.getResponse().writeWith(Mono.just(buffer));
+        } catch (JsonProcessingException e) {
+            return exchange.getResponse().setComplete();
+        }
+    }
 }
+
+

@@ -1,12 +1,13 @@
-package com.legaldocsgpt.documentgenerator.dto;
+package com.legaldocsgpt.shared.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
-public class GenerateResponse {
+@NoArgsConstructor
+public class DocumentFinalizeEvent {
     private String jobId;
+    private String editedContent;
 }

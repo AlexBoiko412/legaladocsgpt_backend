@@ -1,4 +1,4 @@
-package com.legaldocsgpt.documentgenerator.service.provider;
+package com.legaldocsgpt.documentworker.service.provider;
 
 
 

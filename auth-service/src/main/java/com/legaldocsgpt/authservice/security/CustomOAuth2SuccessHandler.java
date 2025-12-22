@@ -1,6 +1,7 @@
 package com.legaldocsgpt.authservice.security;
 
 import com.legaldocsgpt.authservice.entity.User;
+import com.legaldocsgpt.authservice.exception.UserNotFoundException;
 import com.legaldocsgpt.authservice.repository.UserRepository;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -38,25 +39,17 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         String email = oauthUser.getAttribute("email");
 
         User user = userRepository.findByEmail(email)
-                .orElseGet(() -> userRepository.save(User.builder()
-                        .username(email.split("@")[0])
-                        .email(email)
-                        .password("")
-                        .role("ROLE_USER")
-                        .build()));
+                .orElseThrow(() -> new UserNotFoundException("User not found after OAuth2 login: " + email));
 
         String token = jwtUtil.generateToken(user.getUsername(), user.getEmail(), user.getRole());
 
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
-        // cookie.setSecure(true);
         cookie.setPath("/");
-        cookie.setMaxAge(3600);
+        cookie.setMaxAge(24000);
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
 
         response.sendRedirect(redirectUri);
     }
 }
-
-

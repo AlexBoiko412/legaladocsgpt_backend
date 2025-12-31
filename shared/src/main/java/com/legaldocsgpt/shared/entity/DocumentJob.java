@@ -22,6 +22,7 @@ public class DocumentJob {
 
     @Column(nullable = false, unique = true)
     private String jobId;
+    private String title;
 
     @Column(nullable = false)
     private String userId;
@@ -35,6 +36,20 @@ public class DocumentJob {
     private LocalDateTime createdAt;
 
     private LocalDateTime completedAt;
+    private LocalDateTime lastEditedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        lastEditedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        lastEditedAt = LocalDateTime.now();
+    }
+
+
 
     @Column(columnDefinition = "TEXT")
     private String generatedContent;

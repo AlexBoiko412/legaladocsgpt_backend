@@ -44,9 +44,7 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
 
         var cookie = exchange.getRequest().getCookies().getFirst("token");
         if (cookie == null || cookie.getValue().isEmpty()) {
-            if (cookie == null || cookie.getValue().isEmpty()) {
-                return handleUnauthorized(exchange, "Missing or empty authentication token");
-            }
+            return handleUnauthorized(exchange, "Missing or empty authentication token");
         }
 
         String token = cookie.getValue();

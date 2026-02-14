@@ -46,7 +46,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         cookie.setPath("/");
-        cookie.setMaxAge(24000);
+        cookie.setMaxAge(3600000);
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
 

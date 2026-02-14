@@ -1,17 +1,22 @@
-version: "3.9"
-
 volumes:
   postgres_data:
   document_data:
+  mongo_data:
+  redis_data:
+  minio_data:
   doc-storage:
+  maven-cache:
 
 networks:
   backend:
     driver: bridge
+    internal: false
   database:
     driver: bridge
+    internal: true
 
 services:
+  # --- RELATIONAL DATABASES (Postgres) ---
   auth-db:
     image: postgres:16
     environment:
@@ -25,115 +30,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
     networks:
       - database
 
-  auth-service:
-    build:
-      context: ./auth-service
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./auth-service:/app
-      - ./auth-service/target/classes:/app/target/classes
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      CHOKIDAR_USEPOLLING: true
-    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
-    ports:
-      - "8081:8081"
-    depends_on:
-      auth-db:
-        condition: service_healthy
-    networks:
-      - backend
-      - database
-
-  api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./api-gateway:/app
-      - ./api-gateway/target/classes:/app/target/classes
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      JWT_SECRET: ${JWT_SECRET}
-      CHOKIDAR_USEPOLLING: true
-    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
-    ports:
-      - "8080:8080"
-    depends_on:
-      - auth-service
-      - document-generator
-      - template-service
-      - storage-service
-    networks:
-      - backend
-
-  document-generator:
-    build:
-      context: ./document-generator
-      dockerfile: Dockerfile.dev
-    volumes:
-      - .:/app
-      - ~/.m2:/root/.m2
-    working_dir: /app/document-generator
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
-      CHOKIDAR_USEPOLLING: true
-    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
-    ports:
-      - "8082:8082"
-    depends_on:
-      document-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - backend
-      - database
-  document-worker:
-    build:
-      context: ./document-worker
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./document-worker:/app
-      - ~/.m2:/root/.m2
-      - doc-storage:/app/storage/docs
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_RABBITMQ_HOST: rabbitmq
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      AI_PROVIDER: groq
-    ports:
-      - "8085:8085"
-    depends_on:
-      document-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - backend
-      - database
   document-db:
     image: postgres:16
     environment:
@@ -150,6 +49,53 @@ services:
     networks:
       - database
 
+  # --- NOSQL DATABASE (MongoDB for Templates) ---
+  template-db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - database
+
+  # --- CACHING LAYER (Redis) ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
+  # --- OBJECT STORAGE (MinIO / S3) ---
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console (UI)
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - backend
+
+  # --- MESSAGING (RabbitMQ) ---
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -163,35 +109,222 @@ services:
     networks:
       - backend
 
+  # --- MICROSERVICES ---
+  init-shared:
+    image: maven:3.9.9-eclipse-temurin-21
+    volumes:
+      - .:/app
+      - maven-cache:/root/.m2
+    working_dir: /app
+    command: mvn install -DskipTests -pl shared -am -B
+
   template-service:
     build:
-      context: ./template-service
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./template-service:/app
-      - ./template-service/target/classes:/app/target/classes
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      CHOKIDAR_USEPOLLING: true
-    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+      context: .
+      dockerfile: template-service/Dockerfile
+      target: dev
+      args:
+        SERVICE_PATH: template-service
     ports:
       - "8083:8083"
+    volumes:
+      - .:/app
+      - maven-cache:/root/.m2
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      SPRING_DATA_MONGODB_URI: mongodb://template-db:27017/templates_db
+      SPRING_DATA_REDIS_HOST: redis
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8083/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      init-shared:
+          condition: service_completed_successfully
+      template-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - backend
+      - database
 
   storage-service:
     build:
-      context: ./storage-service
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: storage-service/Dockerfile
+      target: dev
+      args:
+        SERVICE_PATH: storage-service
+    ports:
+      - "8084:8084"
     volumes:
-      - ./storage-service:/app
-      - ./storage-service/target/classes:/app/target/classes
+      - .:/app
+      - maven-cache:/root/.m2
       - doc-storage:/app/storage/docs
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      CHOKIDAR_USEPOLLING: true
-    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments=-Xmx512m
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8084/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      init-shared:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+    networks:
+      - backend
+
+  document-generator:
+    build:
+      context: .
+      dockerfile: document-generator/Dockerfile
+      target: dev
+      args:
+        SERVICE_PATH: document-generator
     ports:
-      - "8084:8084"
+      - "8082:8082"
+    volumes:
+      - .:/app
+      - maven-cache:/root/.m2
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_DATA_REDIS_HOST: redis
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8082/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      init-shared:
+        condition: service_completed_successfully
+      document-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+
+  document-worker:
+    build:
+      context: .
+      dockerfile: document-worker/Dockerfile
+      target: dev
+      args:
+        SERVICE_PATH: document-worker
+    ports:
+      - "8085:8085"
+    volumes:
+      - .:/app
+      - maven-cache:/root/.m2
+      - doc-storage:/app/storage/docs
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8085/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      init-shared:
+        condition: service_completed_successfully
+      document-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - backend
+      - database
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+      target: dev
+      args:
+        SERVICE_PATH: auth-service
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/app
+      - maven-cache:/root/.m2
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${POSTGRES_DB}
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      init-shared:
+        condition: service_completed_successfully
+      auth-db:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+      target: dev
+      args:
+        SERVICE_PATH: api-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - maven-cache:/root/.m2
+    depends_on:
+      init-shared:
+        condition: service_completed_successfully
+      auth-service:
+        condition: service_healthy
+      document-generator:
+        condition: service_healthy
+      template-service:
+        condition: service_healthy
+      storage-service:
+        condition: service_healthy
     networks:
       - backend

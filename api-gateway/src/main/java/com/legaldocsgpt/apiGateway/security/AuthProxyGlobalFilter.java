@@ -1,72 +1,85 @@
 package com.legaldocsgpt.apiGateway.security;
 
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.legaldocsgpt.apiGateway.dto.UserInfoResponseDto;
+import com.legaldocsgpt.shared.dto.ErrorResponse;
+import com.legaldocsgpt.shared.exception.GlobalErrorCode;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.util.HashMap;
+import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
 public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    public AuthProxyGlobalFilter(WebClient.Builder builder) {
+    private final Map<String, Boolean> tokenCache = new ConcurrentHashMap<>();
+
+    public AuthProxyGlobalFilter(WebClient.Builder builder, ObjectMapper objectMapper) {
         this.webClient = builder.baseUrl("http://auth-service:8081").build();
+        this.objectMapper = objectMapper;
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
 
-        if (path.startsWith("/api/auth/oauth2/")
-                || path.startsWith("/api/auth/login")
-                || path.startsWith("/api/auth/logout")
-                || path.startsWith("/api/auth/signup")
-        ) {
+        if (isWhitelisted(path)) {
             return chain.filter(exchange);
         }
 
         var cookie = exchange.getRequest().getCookies().getFirst("token");
         if (cookie == null || cookie.getValue().isEmpty()) {
-            return handleUnauthorized(exchange, "Missing or empty authentication token");
+            return handleUnauthorized(exchange, GlobalErrorCode.UNAUTHORIZED);
         }
 
         String token = cookie.getValue();
-
-
 
         return webClient.get()
                 .uri("/validate")
                 .header(HttpHeaders.COOKIE, "token=" + token)
                 .retrieve()
-                .toBodilessEntity()
-                .flatMap(resp -> {
-                    if (resp.getStatusCode().is2xxSuccessful()) {
-                        return chain.filter(exchange);
-                    } else {
-                        return handleUnauthorized(exchange, "Invalid session or token expired");
+                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Invalid Token")))
+                .toEntity(UserInfoResponseDto.class)
+                .flatMap(response -> {
+                    UserInfoResponseDto user = response.getBody();
+
+                    if (user == null || user.getId() == null) {
+                        return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
                     }
+
+                    ServerWebExchange mutatedExchange = exchange.mutate()
+                            .request(r -> r.header("X-User-Id", String.valueOf(user.getId())))
+                            .build();
+
+                    return chain.filter(mutatedExchange);
                 })
                 .onErrorResume(err -> {
-                    log.error("Error validating token", err);
-                    return handleUnauthorized(exchange, "Invalid session or token expired");
+                    log.error("Error validating token: {}", err.getMessage());
+                    return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
                 });
+    }
+
+    private boolean isWhitelisted(String path) {
+        return path.contains("/api/auth/login") ||
+                path.contains("/api/auth/signup") ||
+                path.contains("/api/auth/oauth2/");
     }
 
     @Override
@@ -74,29 +87,25 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         return -1;
     }
 
-
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private Mono<Void> handleUnauthorized(ServerWebExchange exchange, String message) {
-        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+    private Mono<Void> handleUnauthorized(ServerWebExchange exchange, GlobalErrorCode errorCode) {
+        exchange.getResponse().setStatusCode(errorCode.getStatus());
         exchange.getResponse().getHeaders().add(HttpHeaders.CONTENT_TYPE, "application/json");
 
-        Map<String, Object> errorDetails = new HashMap<>();
-        errorDetails.put("timestamp", java.time.LocalDateTime.now().toString());
-        errorDetails.put("status", HttpStatus.UNAUTHORIZED.value());
-        errorDetails.put("error", "Unauthorized");
-        errorDetails.put("message", message);
-        errorDetails.put("path", exchange.getRequest().getPath().value());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getDefaultMessage())
+                .timestamp(LocalDateTime.now())
+                .path(exchange.getRequest().getPath().value())
+                .traceId(UUID.randomUUID().toString().substring(0, 8))
+                .build();
 
         try {
-            byte[] bytes = objectMapper.writeValueAsBytes(errorDetails);
+            byte[] bytes = objectMapper.writeValueAsBytes(errorResponse);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);
             return exchange.getResponse().writeWith(Mono.just(buffer));
         } catch (JsonProcessingException e) {
+            log.error("Error serializing error response", e);
             return exchange.getResponse().setComplete();
         }
     }
 }
-
-

@@ -1,4 +1,4 @@
-package com.legaldocsgpt.authservice.dto;
+package com.legaldocsgpt.apiGateway.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

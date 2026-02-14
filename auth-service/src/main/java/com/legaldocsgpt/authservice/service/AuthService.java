@@ -1,6 +1,7 @@
 package com.legaldocsgpt.authservice.service;
 
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
+import com.legaldocsgpt.authservice.dto.UserTokenInfo;
 import com.legaldocsgpt.authservice.entity.User;
 import com.legaldocsgpt.authservice.exception.InvalidCredentialsException;
 import com.legaldocsgpt.authservice.exception.InvalidInputException;
@@ -8,6 +9,7 @@ import com.legaldocsgpt.authservice.exception.UserAlreadyExistsException;
 import com.legaldocsgpt.authservice.exception.UserNotFoundException;
 import com.legaldocsgpt.authservice.repository.UserRepository;
 import com.legaldocsgpt.authservice.security.JwtUtil;
+import com.legaldocsgpt.shared.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,24 +24,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
+    public String signup(String username, String email, String password) {
+        if (username == null || username.trim().isEmpty() || username.length() < 3) {
+            throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT, "Username too short");
+        }
 
-    public String signup(String username,  String email, String password) {
-        if (username == null || username.trim().isEmpty()) {
-            throw new InvalidInputException("Username is required");
-        }
-        if (email == null || !email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
-            throw new InvalidInputException("Invalid email format");
-        }
-        if (password == null || password.length() < 8) {
-            throw new InvalidInputException("Password must be at least 8 characters");
-        }
         if (userRepository.existsByUsername(username)) {
-            throw new UserAlreadyExistsException("Username already exists");
-        }
-        if (userRepository.existsByEmail(email)) {
-            throw new UserAlreadyExistsException("Email already exists");
+            throw new UserAlreadyExistsException("A user with this username already exists");
         }
 
+        if (userRepository.existsByEmail(email)) {
+            throw new UserAlreadyExistsException("A user with this email already exists");
+        }
 
         User user = User.builder()
                 .username(username)
@@ -47,48 +43,54 @@ public class AuthService {
                 .password(passwordEncoder.encode(password))
                 .role("ROLE_USER")
                 .build();
-        userRepository.save(user);
-        return jwtUtil.generateToken(username, user.getEmail(), user.getRole());
+
+        user = userRepository.save(user);
+        return jwtUtil.generateToken(user.getUsername(), user.getEmail(), user.getRole());
     }
 
     public String login(String username, String email, String password) {
-        User user;
-        if (email != null && !email.isBlank()) {
-            user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
-        } else if (username != null && !username.isBlank()) {
-            user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new UserNotFoundException("User not found with username: " + username));
-        } else {
-            throw new InvalidInputException("Username or email must be provided");
-        }
+        User user = findByUsernameOrEmail(username, email);
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new InvalidCredentialsException("Invalid credentials");
+            throw new InvalidCredentialsException();
         }
 
         return jwtUtil.generateToken(user.getUsername(), user.getEmail(), user.getRole());
     }
 
     public UserInfoResponseDto validateTokenAndUserInDB(String token) {
-        UserInfoResponseDto userInfo = jwtUtil.validateToken(token);
+        UserTokenInfo userInfo = jwtUtil.validateToken(token);
         if (userInfo == null) {
-            return null;
+            throw new InvalidCredentialsException();
         }
-        User user = userRepository.findByEmail(userInfo.getEmail()).orElse(null);
-        if (user == null) {
-            return null;
+
+        User user = userRepository.findByEmail(userInfo.getEmail())
+                .orElseThrow(UserNotFoundException::new);
+
+        return new UserInfoResponseDto(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole()
+        );
+    }
+
+    public UserTokenInfo getDecryptedToken(String token) {
+        UserTokenInfo userInfo = jwtUtil.validateToken(token);
+
+        if (userInfo == null) {
+            throw new InvalidCredentialsException();
         }
+
         return userInfo;
     }
 
-    public UserInfoResponseDto getDecryptedToken(String token) {
-        UserInfoResponseDto userInfo = jwtUtil.validateToken(token);
-        if (userInfo == null) {
-            return null;
+    private User findByUsernameOrEmail(String username, String email) {
+        if (email != null && !email.isBlank()) {
+            return userRepository.findByEmail(email).orElseThrow(UserNotFoundException::new);
+        } else if (username != null && !username.isBlank()) {
+            return userRepository.findByUsername(username).orElseThrow(UserNotFoundException::new);
         }
-
-        return userInfo;
+        throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT, "Please provide email or username");
     }
-
 }

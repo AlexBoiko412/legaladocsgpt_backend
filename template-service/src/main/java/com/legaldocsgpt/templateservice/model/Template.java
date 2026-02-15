@@ -1,17 +1,20 @@
-package com.legaldocsgpt.shared.dto;
+package com.legaldocsgpt.templateservice.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 import java.util.List;
 
+@Document(collection = "templates")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TemplateDefinition {
+public class Template {
+    @Id
     private String id;
     private String name;
     private String description;

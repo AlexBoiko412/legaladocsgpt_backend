@@ -7,7 +7,6 @@ import com.legaldocsgpt.shared.dto.FinalizeRequest;
 import com.legaldocsgpt.shared.dto.GenerateRequest;
 import com.legaldocsgpt.shared.dto.JobStatusResponse;
 import com.legaldocsgpt.shared.dto.TemplateDefinition;
-import com.legaldocsgpt.shared.service.TemplateRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

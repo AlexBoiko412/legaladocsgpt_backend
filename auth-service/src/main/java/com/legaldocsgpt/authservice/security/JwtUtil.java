@@ -1,6 +1,5 @@
 package com.legaldocsgpt.authservice.security;
 
-import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
 import com.legaldocsgpt.authservice.dto.UserTokenInfo;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;

@@ -61,7 +61,9 @@ public class SecurityConfig {
                                 "/logout",
                                 "/validate",
                                 "/me",
-                                "/oauth2/**")
+                                "/oauth2/**",
+                                "/actuator/**"
+                        )
                         .permitAll()
                         .anyRequest().authenticated()
                 )

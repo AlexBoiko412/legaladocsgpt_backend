@@ -1,11 +1,14 @@
 package com.legaldocsgpt.authservice.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import com.legaldocsgpt.shared.exception.EntityNotFoundException;
+import com.legaldocsgpt.shared.exception.GlobalErrorCode;
 
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public class UserNotFoundException extends RuntimeException {
-  public UserNotFoundException(String message) {
-    super(message);
-  }
+public class UserNotFoundException extends EntityNotFoundException {
+    public UserNotFoundException() {
+        super(GlobalErrorCode.NOT_FOUND, "User with the provided credentials was not found.");
+    }
+
+    public UserNotFoundException(String message) {
+        super(GlobalErrorCode.NOT_FOUND, message);
+    }
 }

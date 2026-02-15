@@ -1,11 +1,10 @@
 package com.legaldocsgpt.authservice.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import com.legaldocsgpt.shared.exception.GlobalErrorCode;
+import com.legaldocsgpt.shared.exception.UnauthorizedException;
 
-@ResponseStatus(HttpStatus.UNAUTHORIZED)
-public class InvalidCredentialsException extends RuntimeException {
-  public InvalidCredentialsException(String message) {
-    super(message);
-  }
+public class InvalidCredentialsException extends UnauthorizedException {
+    public InvalidCredentialsException() {
+        super(GlobalErrorCode.UNAUTHORIZED, "Invalid username or password.");
+    }
 }

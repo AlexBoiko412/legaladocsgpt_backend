@@ -1,11 +1,10 @@
 package com.legaldocsgpt.authservice.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import com.legaldocsgpt.shared.exception.BaseBusinessException;
+import com.legaldocsgpt.shared.exception.GlobalErrorCode;
 
-@ResponseStatus(HttpStatus.CONFLICT)
-public class UserAlreadyExistsException extends RuntimeException {
+public class UserAlreadyExistsException extends BaseBusinessException {
     public UserAlreadyExistsException(String message) {
-        super(message);
+        super(GlobalErrorCode.USER_ALREADY_EXISTS, message);
     }
 }

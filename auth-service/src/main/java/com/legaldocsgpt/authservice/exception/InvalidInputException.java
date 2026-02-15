@@ -1,11 +1,14 @@
 package com.legaldocsgpt.authservice.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import com.legaldocsgpt.shared.exception.BaseBusinessException;
+import com.legaldocsgpt.shared.exception.GlobalErrorCode;
 
-@ResponseStatus(HttpStatus.BAD_REQUEST)
-public class InvalidInputException extends RuntimeException {
-    public InvalidInputException(String message) {
-        super(message);
+public class InvalidInputException extends BaseBusinessException {
+    public InvalidInputException(GlobalErrorCode errorCode) {
+        super(errorCode);
+    }
+
+    public InvalidInputException(GlobalErrorCode errorCode, String customMessage) {
+        super(errorCode, customMessage);
     }
 }

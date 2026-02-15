@@ -1,6 +1,7 @@
 package com.legaldocsgpt.authservice.security;
 
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
+import com.legaldocsgpt.authservice.dto.UserTokenInfo;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -35,7 +36,7 @@ public class JwtUtil {
                 .compact();
     }
 
-    public UserInfoResponseDto validateToken(String token) {
+    public UserTokenInfo validateToken(String token) {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)
@@ -46,7 +47,7 @@ public class JwtUtil {
             String email = claims.get("email", String.class);
             String role = claims.get("role", String.class);
 
-            return new UserInfoResponseDto(email, username, role);
+            return new UserTokenInfo(email, username, role);
 
         } catch (JwtException e) {
             return null;

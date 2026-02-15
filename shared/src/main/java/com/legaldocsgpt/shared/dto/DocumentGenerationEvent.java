@@ -10,6 +10,7 @@ import java.util.Map;
 @NoArgsConstructor
 public class DocumentGenerationEvent {
     private String jobId;
+    private String userId;
     private String templateId;
     private String format;
     private Map<String, String> data;

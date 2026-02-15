@@ -1,28 +1,24 @@
 package com.legaldocsgpt.documentgenerator.controller;
 
-import com.legaldocsgpt.shared.dto.FinalizeRequest;
-import com.legaldocsgpt.shared.dto.JobStatusResponse;
-import com.legaldocsgpt.shared.dto.GenerateRequest;
 import com.legaldocsgpt.documentgenerator.dto.GenerateResponse;
-import com.legaldocsgpt.shared.dto.TemplateDefinition;
+import com.legaldocsgpt.documentgenerator.exception.ValidationException;
 import com.legaldocsgpt.documentgenerator.service.DocumentService;
+import com.legaldocsgpt.shared.dto.FinalizeRequest;
+import com.legaldocsgpt.shared.dto.GenerateRequest;
+import com.legaldocsgpt.shared.dto.JobStatusResponse;
+import com.legaldocsgpt.shared.dto.TemplateDefinition;
 import com.legaldocsgpt.shared.service.TemplateRegistry;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
+@RequiredArgsConstructor
 public class DocumentController {
 
     private final DocumentService documentService;
-    private final TemplateRegistry templateRegistry;
-
-    public DocumentController(DocumentService documentService, TemplateRegistry templateRegistry) {
-
-        this.documentService = documentService;
-        this.templateRegistry = templateRegistry;
-    }
 
     @GetMapping("/info")
     public ResponseEntity<String> generateDocumentInfo() {
@@ -35,14 +31,13 @@ public class DocumentController {
     }
 
     @GetMapping("/templates")
-    public List<TemplateDefinition> getTemplates() {
-        return templateRegistry.getAllTemplates();
+    public ResponseEntity<List<TemplateDefinition>> getTemplates() {
+        return ResponseEntity.ok(documentService.getTemplates());
     }
 
     @PostMapping("/generate")
     public ResponseEntity<GenerateResponse> generateDocument(@RequestBody GenerateRequest request) {
-        String mockUserId = "user-123";
-        return ResponseEntity.ok(documentService.generateDocument(request, mockUserId));
+        return ResponseEntity.ok(documentService.generateDocument(request));
     }
 
     @GetMapping("/status/{jobId}")
@@ -55,8 +50,8 @@ public class DocumentController {
             @PathVariable String jobId,
             @RequestBody FinalizeRequest request
     ) {
-        if (request.getEditedContent() == null) {
-            return ResponseEntity.badRequest().build();
+        if (request.getEditedContent() == null || request.getEditedContent().isBlank()) {
+            throw new ValidationException("Cannot finalize: Document content is missing or empty.");
         }
         documentService.sendFinalizeEvent(jobId, request.getEditedContent());
         return ResponseEntity.accepted().build();

@@ -1,6 +1,8 @@
 package com.legaldocsgpt.authservice.controller;
 
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
+import com.legaldocsgpt.authservice.dto.UserTokenInfo;
+import com.legaldocsgpt.authservice.exception.InvalidCredentialsException;
 import com.legaldocsgpt.authservice.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
@@ -47,30 +49,25 @@ public class AuthController {
     }
 
     @GetMapping("/validate")
-    public ResponseEntity<?> validateToken(@CookieValue(name = "token", required = false) String token) {
-        if (token == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    public ResponseEntity<UserInfoResponseDto> validateToken(
+            @CookieValue(name = "token", required = false) String token) {
+
+        if (token == null || token.isEmpty()) {
+            throw new InvalidCredentialsException();
         }
 
-
-        UserInfoResponseDto userInfo = authService.validateTokenAndUserInDB(token);
-        if (userInfo != null) {
-            return ResponseEntity.ok(userInfo);
-        }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        return ResponseEntity.ok(authService.validateTokenAndUserInDB(token));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<?> getUserInfo(@CookieValue(name = "token", required = false) String token) {
+    public ResponseEntity<UserTokenInfo> getUserInfo(
+            @CookieValue(name = "token", required = false) String token) {
+
         if (token == null || token.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            throw new InvalidCredentialsException();
         }
 
-        UserInfoResponseDto userInfo = authService.getDecryptedToken(token);
-        if (userInfo != null) {
-            return ResponseEntity.ok(userInfo);
-        }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        return ResponseEntity.ok(authService.getDecryptedToken(token));
     }
 
 

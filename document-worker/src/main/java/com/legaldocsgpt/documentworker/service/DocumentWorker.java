@@ -4,7 +4,7 @@ import com.legaldocsgpt.documentworker.exception.AiProviderException;
 import com.legaldocsgpt.documentworker.exception.PdfGenerationException;
 import com.legaldocsgpt.documentworker.service.prompt.PromptBuilder;
 import com.legaldocsgpt.documentworker.service.provider.OpenAIProvider;
-import com.legaldocsgpt.shared.dto.DocumentFinalizeEvent;
+import com.legaldocsgpt.shared.client.StorageClient;
 import com.legaldocsgpt.shared.dto.DocumentGenerationEvent;
 import com.legaldocsgpt.shared.entity.JobStatus;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,9 @@ public class DocumentWorker {
     private final DocumentJobInternalService jobService;
     private final OpenAIProvider aiProvider;
     private final PromptBuilder promptBuilder;
-    private final PdfService pdfService;
+    private final StorageClient storageClient;
+    private final WordProcessingService wordService;
+    private final WordToPdfService wordToPdfService;
 
     @RabbitHandler
     public void processInitialGeneration(DocumentGenerationEvent event) {
@@ -36,11 +38,15 @@ public class DocumentWorker {
             String finalPrompt = promptBuilder.buildFinalPrompt(event);
             String generatedContent = aiProvider.generateText(finalPrompt);
 
+            byte[] shellBytes = storageClient.downloadGeneric(event.getDocxPath());
+
+            byte[] assembledDocx = wordService.assembleDocument(shellBytes, generatedContent, event.getData());
+
+            String fileName = event.getJobId() + ".docx";
+            storageClient.uploadGeneric(fileName, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", assembledDocx);
+
             jobService.saveGeneratedContent(jobId, userId, generatedContent);
-
-            String fileUrl = pdfService.generatePdf(jobId, generatedContent);
-
-            jobService.completeJob(jobId, userId, fileUrl, generatedContent);
+            jobService.completeJob(jobId, userId, fileName, null);
             log.info("Job {} completed successfully", jobId);
 
         } catch (AiProviderException | PdfGenerationException e) {
@@ -50,28 +56,8 @@ public class DocumentWorker {
         } catch (Exception e) {
             log.error("CRITICAL error in job {}: ", jobId, e);
             jobService.failJob(jobId, userId, "System error: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-            throw e;
         }
     }
 
-    @RabbitHandler
-    public void processFinalizeEvent(DocumentFinalizeEvent event) {
-        String jobId = event.getJobId();
-        String userId = event.getUserId();
 
-        log.info("Received Finalize Event for job: {}", jobId);
-
-        try {
-            String fileUrl = pdfService.generatePdf(jobId, event.getEditedContent());
-
-            jobService.completeJob(jobId, userId, fileUrl, event.getEditedContent());
-
-            log.info("Job {} re-finalized and updated successfully", jobId);
-
-        } catch (Exception e) {
-            log.error("Failed to finalize PDF for job {}: {}", jobId, e.getMessage());
-            jobService.failJob(jobId, userId, "Finalization failed: " + e.getMessage());
-            throw e;
-        }
-    }
 }

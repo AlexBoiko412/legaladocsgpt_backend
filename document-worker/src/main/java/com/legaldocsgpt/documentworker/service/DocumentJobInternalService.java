@@ -36,11 +36,13 @@ public class DocumentJobInternalService {
         });
     }
     @Transactional
-    public void completeJob(String jobId, String userId, String fileUrl) {
+    public void completeJob(String jobId, String userId, String fileUrl, String latestGeneratedContent) {
         repository.findByJobIdAndUserId(jobId, userId).ifPresentOrElse(job -> {
             job.setFileUrl(fileUrl);
             job.setStatus(JobStatus.COMPLETED);
+            job.setGeneratedContent(latestGeneratedContent);
             job.setLastEditedAt(LocalDateTime.now());
+            job.setCompletedAt(LocalDateTime.now());
             repository.save(job);
         }, () -> {
             throw new EntityNotFoundException(

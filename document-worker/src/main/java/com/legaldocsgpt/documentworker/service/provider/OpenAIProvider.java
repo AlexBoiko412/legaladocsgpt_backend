@@ -51,7 +51,7 @@ public class OpenAIProvider implements AIProvider {
 
     @Override
     public String generateText(String prompt) {
-        return client.post()
+        String response = client.post()
                 .uri("/chat/completions")
                 .bodyValue(Map.of(
                         "model", this.model,
@@ -69,6 +69,8 @@ public class OpenAIProvider implements AIProvider {
                     return (String) message.get("content");
                 })
                 .block();
+
+        return response;
     }
 
     public String handleAiFallback(String prompt, Throwable t) {

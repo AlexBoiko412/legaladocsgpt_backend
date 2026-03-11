@@ -12,6 +12,7 @@ public class DocumentGenerationEvent {
     private String jobId;
     private String userId;
     private String templateId;
+    private String docxPath;
     private String format;
     private Map<String, String> data;
 }

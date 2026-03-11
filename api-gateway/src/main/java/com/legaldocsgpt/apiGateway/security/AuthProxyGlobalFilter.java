@@ -79,7 +79,9 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
     private boolean isWhitelisted(String path) {
         return path.contains("/api/auth/login") ||
                 path.contains("/api/auth/signup") ||
-                path.contains("/api/auth/oauth2/");
+                path.contains("/api/auth/oauth2/") ||
+                path.contains("/api/storage/download-raw") ||
+                path.contains("/api/storage/callback");
     }
 
     @Override

@@ -23,3 +23,11 @@ spring:
     username: guest
     password: guest
 
+edit:
+  token:
+    secret: ${EDIT_TOKEN_SECRET}
+
+
+onlyoffice:
+  jwt:
+    secret: ${ONLYOFFICE_JWT_SECRET}

@@ -5,12 +5,15 @@ import com.legaldocsgpt.documentgenerator.config.RabbitMQConfig;
 import com.legaldocsgpt.documentgenerator.dto.*;
 import com.legaldocsgpt.documentgenerator.exception.DocumentJobNotFoundException;
 import com.legaldocsgpt.documentgenerator.exception.TemplateRequiredException;
+import com.legaldocsgpt.documentgenerator.exception.ValidationException;
 import com.legaldocsgpt.shared.context.UserContextHolder;
 import com.legaldocsgpt.shared.dto.*;
 import com.legaldocsgpt.shared.entity.DocumentJob;
 import com.legaldocsgpt.shared.entity.JobStatus;
 import com.legaldocsgpt.shared.exception.UnauthorizedException;
 import com.legaldocsgpt.shared.repository.DocumentJobRepository;
+import com.legaldocsgpt.shared.services.EditTokenService;
+import com.legaldocsgpt.shared.services.OnlyOfficeJwtService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +30,8 @@ public class DocumentService {
     private final DocumentJobRepository documentJobRepository;
     private final RabbitTemplate rabbitTemplate;
     private final TemplateClient templateClient;
+    private final EditTokenService editTokenService;
+    private final OnlyOfficeJwtService onlyOfficeJwtService;
 
     public List<TemplateDefinition> getTemplates() {
         return templateClient.getAllTemplates();
@@ -64,6 +69,7 @@ public class DocumentService {
                 jobId,
                 userId,
                 request.getTemplateId(),
+                template.getDocxPath(),
                 request.getFormat(),
                 request.getData()
         );
@@ -76,17 +82,6 @@ public class DocumentService {
 
         log.info("Job {} published to RabbitMQ exchange", jobId);
         return new GenerateResponse(jobId);
-    }
-
-    public void sendFinalizeEvent(String jobId, String editedContent) {
-        DocumentJob job = documentJobRepository.findByJobIdAndUserId(jobId, UserContextHolder.getUserId())
-                .orElseThrow(() -> new DocumentJobNotFoundException(jobId));
-        job.setGeneratedContent(editedContent);
-        job.setStatus(JobStatus.IN_PROGRESS);
-        documentJobRepository.save(job);
-
-        DocumentFinalizeEvent event = new DocumentFinalizeEvent(jobId, editedContent);
-        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, event);
     }
 
     public JobStatusResponse getJobStatus(String jobId) {
@@ -110,6 +105,46 @@ public class DocumentService {
 
         documentJobRepository.deleteByJobIdAndUserId(jobId, UserContextHolder.getUserId());
         log.info("Document job {} was deleted from the system", jobId);
+    }
+
+    public EditorConfigResponse buildEditorConfig(String jobId, String userId) {
+        DocumentJob job = documentJobRepository.findByJobIdAndUserId(jobId, userId)
+                .orElseThrow(() -> new UnauthorizedException("Document not found"));
+
+        if (job.getStatus() != JobStatus.COMPLETED) {
+            throw new ValidationException("Document is not ready for editing");
+        }
+
+        String editToken = editTokenService.generate(jobId, userId);
+
+        String docxUrl = "http://storage-service:8084/download-raw?key=" + jobId + ".docx";
+        String callbackUrl = "http://storage-service:8084/callback?token=" + editToken;
+
+        EditorConfigResponse config = EditorConfigResponse.builder()
+                .document(EditorConfigResponse.DocumentConfig.builder()
+                        .key(jobId)
+                        .title(job.getTitle() != null ? job.getTitle() : "Document_" + jobId)
+                        .url(docxUrl)
+                        .fileType("docx")
+                        .permissions(EditorConfigResponse.Permissions.builder()
+                                .edit(true)
+                                .download(true)
+                                .print(false)
+                                .build())
+                        .build())
+                .editorConfig(EditorConfigResponse.EditorConfig.builder()
+                        .callbackUrl(callbackUrl)
+                        .lang("en-US")
+                        .mode("edit")
+                        .user(EditorConfigResponse.User.builder()
+                                .id(userId)
+                                .name("Legal Editor")
+                                .build())
+                        .build())
+                .build();
+
+        config.setToken(onlyOfficeJwtService.buildToken(config));
+        return config;
     }
 
     private JobStatusResponse mapToResponse(DocumentJob job) {

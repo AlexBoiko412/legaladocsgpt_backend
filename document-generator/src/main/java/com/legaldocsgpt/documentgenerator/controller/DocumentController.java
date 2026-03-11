@@ -3,10 +3,8 @@ package com.legaldocsgpt.documentgenerator.controller;
 import com.legaldocsgpt.documentgenerator.dto.GenerateResponse;
 import com.legaldocsgpt.documentgenerator.exception.ValidationException;
 import com.legaldocsgpt.documentgenerator.service.DocumentService;
-import com.legaldocsgpt.shared.dto.FinalizeRequest;
-import com.legaldocsgpt.shared.dto.GenerateRequest;
-import com.legaldocsgpt.shared.dto.JobStatusResponse;
-import com.legaldocsgpt.shared.dto.TemplateDefinition;
+import com.legaldocsgpt.shared.context.UserContextHolder;
+import com.legaldocsgpt.shared.dto.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -44,18 +42,6 @@ public class DocumentController {
         return ResponseEntity.ok(documentService.getJobStatus(jobId));
     }
 
-    @PostMapping("/{jobId}/finalize")
-    public ResponseEntity<Void> finalizeDocument(
-            @PathVariable String jobId,
-            @RequestBody FinalizeRequest request
-    ) {
-        if (request.getEditedContent() == null || request.getEditedContent().isBlank()) {
-            throw new ValidationException("Cannot finalize: Document content is missing or empty.");
-        }
-        documentService.sendFinalizeEvent(jobId, request.getEditedContent());
-        return ResponseEntity.accepted().build();
-    }
-
     @GetMapping
     public ResponseEntity<List<JobStatusResponse>> getAllDocuments(
             @RequestParam(required = false) String search
@@ -67,5 +53,12 @@ public class DocumentController {
     public ResponseEntity<Void> deleteDocument(@PathVariable String jobId) {
         documentService.deleteDocument(jobId);
         return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/{jobId}/editor-config")
+    public ResponseEntity<EditorConfigResponse> getEditorConfig(@PathVariable String jobId) {
+        String userId = UserContextHolder.getUserId();
+        return ResponseEntity.ok(documentService.buildEditorConfig(jobId, userId));
     }
 }

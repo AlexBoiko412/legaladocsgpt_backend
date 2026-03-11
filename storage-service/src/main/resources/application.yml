@@ -11,3 +11,7 @@ aws:
     secret-key: ${S3_SECRET_KEY}
     region: ${S3_REGION:us-east-1}
     bucket-name: ${S3_BUCKET:legaldocs}
+
+edit:
+  token:
+    secret: ${EDIT_TOKEN_SECRET}

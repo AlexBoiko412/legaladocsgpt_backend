@@ -7,11 +7,12 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3AsyncClient;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 import java.net.URI;
-import java.util.concurrent.CompletableFuture;
 
 @Configuration
 public class S3Config {
@@ -29,8 +30,8 @@ public class S3Config {
     private String region;
 
     @Bean
-    public S3AsyncClient s3AsyncClient() {
-        return S3AsyncClient.builder()
+    public S3Client s3Client() {
+        return S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
@@ -42,16 +43,14 @@ public class S3Config {
     }
 
     @Bean
-    public CommandLineRunner initializeBucket(S3AsyncClient s3AsyncClient,
+    public CommandLineRunner initializeBucket(S3Client s3Client,
                                               @Value("${aws.s3.bucket-name}") String bucket) {
         return args -> {
-            s3AsyncClient.headBucket(b -> b.bucket(bucket))
-                    .handle((resp, err) -> {
-                        if (err != null) {
-                            return s3AsyncClient.createBucket(b -> b.bucket(bucket));
-                        }
-                        return CompletableFuture.completedFuture(null);
-                    }).join();
+            try {
+                s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+            } catch (NoSuchBucketException e) {
+                s3Client.createBucket(b -> b.bucket(bucket));
+            }
         };
     }
 }

@@ -13,6 +13,7 @@ public class JobStatusResponse {
     private String status;
     private String title;
     private String fileUrl;
+    private String docxUrl;
     private String errorDetails;
     private String generatedContent;
 

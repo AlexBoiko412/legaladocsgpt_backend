@@ -16,6 +16,7 @@ public class TemplateDefinition {
     private String name;
     private String description;
     private String systemPrompt;
+    private String docxPath;
     private List<TemplateField> fields;
 
     @Data

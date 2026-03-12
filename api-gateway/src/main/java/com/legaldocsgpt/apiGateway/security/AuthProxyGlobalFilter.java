@@ -2,6 +2,8 @@ package com.legaldocsgpt.apiGateway.security;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.legaldocsgpt.apiGateway.dto.UserInfoResponseDto;
 import com.legaldocsgpt.shared.dto.ErrorResponse;
 import com.legaldocsgpt.shared.exception.GlobalErrorCode;
@@ -18,9 +20,8 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -29,7 +30,10 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    private final Map<String, Boolean> tokenCache = new ConcurrentHashMap<>();
+    private final Cache<String, UserInfoResponseDto> tokenCache = Caffeine.newBuilder()
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .maximumSize(10_000)
+            .build();
 
     public AuthProxyGlobalFilter(WebClient.Builder builder, ObjectMapper objectMapper) {
         this.webClient = builder.baseUrl("http://auth-service:8081").build();
@@ -50,6 +54,12 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         }
 
         String token = cookie.getValue();
+
+        UserInfoResponseDto cachedUser = tokenCache.getIfPresent(token);
+        if (cachedUser != null) {
+            log.debug("Token cache hit for user {}", cachedUser.getId());
+            return chain.filter(withUserHeader(exchange, cachedUser));
+        }
 
         return webClient.get()
                 .uri("/validate")
@@ -74,6 +84,12 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
                     log.error("Error validating token: {}", err.getMessage());
                     return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
                 });
+    }
+
+    private ServerWebExchange withUserHeader(ServerWebExchange exchange, UserInfoResponseDto user) {
+        return exchange.mutate()
+                .request(r -> r.header("X-User-Id", String.valueOf(user.getId())))
+                .build();
     }
 
     private boolean isWhitelisted(String path) {

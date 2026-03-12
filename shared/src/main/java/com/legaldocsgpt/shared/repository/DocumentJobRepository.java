@@ -19,4 +19,6 @@ public interface DocumentJobRepository extends JpaRepository<DocumentJob, Long> 
     List<DocumentJob> findByUserIdAndTitleContainingIgnoreCaseOrderByLastEditedAtDesc(String userId, String title);
 
     void deleteByJobIdAndUserId(String jobId, String userId);
+
+    boolean existsByJobIdAndUserId(String jobId, String userId);
 }

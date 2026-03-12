@@ -96,7 +96,7 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         return path.contains("/api/auth/login") ||
                 path.contains("/api/auth/signup") ||
                 path.contains("/api/auth/oauth2/") ||
-                path.contains("/api/storage/download-raw") ||
+                path.contains("/api/storage/download-editing") ||
                 path.contains("/api/storage/callback");
     }
 

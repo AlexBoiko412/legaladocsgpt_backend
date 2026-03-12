@@ -117,7 +117,7 @@ public class DocumentService {
 
         String editToken = editTokenService.generate(jobId, userId);
 
-        String docxUrl = "http://storage-service:8084/download-raw?key=" + jobId + ".docx";
+        String docxUrl = "http://storage-service:8084/download-editing?token=" + editToken;
         String callbackUrl = "http://storage-service:8084/callback?token=" + editToken;
 
         EditorConfigResponse config = EditorConfigResponse.builder()

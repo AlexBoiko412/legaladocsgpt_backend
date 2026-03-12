@@ -1,5 +1,9 @@
 package com.legaldocsgpt.storageservice.controller;
 
+import com.legaldocsgpt.shared.dto.EditTokenClaims;
+import com.legaldocsgpt.shared.exception.UnauthorizedException;
+import com.legaldocsgpt.shared.repository.DocumentJobRepository;
+import com.legaldocsgpt.shared.services.EditTokenService;
 import com.legaldocsgpt.storageservice.service.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,14 +21,51 @@ import java.util.Map;
 public class StorageController {
 
     private final S3StorageService storageService;
+    private final EditTokenService editTokenService;
+    private final DocumentJobRepository documentJobRepository;
 
     @GetMapping("/{jobId}.pdf")
     public ResponseEntity<byte[]> downloadPdf(@PathVariable String jobId) {
         return storageService.downloadPdf(jobId);
     }
 
+    /**
+     * Called by OnlyOffice Document Server to fetch the DOCX for editing.
+     * Secured by the signed EditToken (same mechanism as /callback).
+     * No user cookie required — this is server-to-server.
+     */
+    @GetMapping("/download-editing")
+    public ResponseEntity<byte[]> downloadForEditing(@RequestParam("token") String token) {
+        EditTokenClaims claims;
+        try {
+            claims = editTokenService.verify(token);
+        } catch (UnauthorizedException e) {
+            return ResponseEntity.status(403).build();
+        }
+
+        String key = claims.jobId() + ".docx";
+        log.info("OnlyOffice fetching DOCX for job {}", claims.jobId());
+        return storageService.downloadFile(key);
+    }
+
+    /**
+     * Called by the browser/frontend to download a document.
+     * X-User-Id is injected by the gateway after JWT validation.
+     * Ownership is verified against the job record.
+     */
     @GetMapping("/download-raw")
-    public ResponseEntity<byte[]> downloadRaw(@RequestParam("key") String key) {
+    public ResponseEntity<byte[]> downloadRaw(
+            @RequestParam("key") String key,
+            @RequestHeader("X-User-Id") String userId) {
+
+        String jobId = key.contains(".") ? key.substring(0, key.lastIndexOf('.')) : key;
+
+        boolean owned = documentJobRepository.existsByJobIdAndUserId(jobId, userId);
+        if (!owned) {
+            log.warn("User {} attempted to download job {} they don't own", userId, jobId);
+            return ResponseEntity.status(403).build();
+        }
+
         return storageService.downloadFile(key);
     }
 

@@ -1,7 +1,5 @@
 package com.legaldocsgpt.documentworker.service;
 
-import com.legaldocsgpt.documentworker.exception.AiProviderException;
-import com.legaldocsgpt.documentworker.exception.PdfGenerationException;
 import com.legaldocsgpt.documentworker.service.prompt.PromptBuilder;
 import com.legaldocsgpt.documentworker.service.provider.OpenAIProvider;
 import com.legaldocsgpt.shared.client.StorageClient;

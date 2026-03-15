@@ -1,7 +1,7 @@
 package com.legaldocsgpt.documentgenerator.service;
 
 import com.legaldocsgpt.documentgenerator.client.TemplateClient;
-import com.legaldocsgpt.documentgenerator.config.RabbitMQConfig;
+import com.legaldocsgpt.shared.config.SharedRabbitConfig;
 import com.legaldocsgpt.documentgenerator.dto.*;
 import com.legaldocsgpt.documentgenerator.exception.DocumentJobNotFoundException;
 import com.legaldocsgpt.documentgenerator.exception.TemplateRequiredException;
@@ -75,8 +75,8 @@ public class DocumentService {
         );
 
         rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_NAME,
-                RabbitMQConfig.ROUTING_KEY,
+                SharedRabbitConfig.EXCHANGE_NAME,
+                SharedRabbitConfig.ROUTING_KEY,
                 event
         );
 

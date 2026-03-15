@@ -5,6 +5,7 @@ import com.legaldocsgpt.documentgenerator.exception.ValidationException;
 import com.legaldocsgpt.documentgenerator.service.DocumentService;
 import com.legaldocsgpt.shared.context.UserContextHolder;
 import com.legaldocsgpt.shared.dto.*;
+import com.legaldocsgpt.shared.repository.DocumentJobRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,14 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentJobRepository documentJobRepository;
+
+    @GetMapping("/ownership")
+    public ResponseEntity<Boolean> checkOwnership(
+            @RequestParam String jobId,
+            @RequestParam String userId) {
+        return ResponseEntity.ok(documentJobRepository.existsByJobIdAndUserId(jobId, userId));
+    }
 
     @GetMapping("/info")
     public ResponseEntity<String> generateDocumentInfo() {

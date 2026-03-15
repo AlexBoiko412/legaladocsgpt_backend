@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -75,6 +76,18 @@ public class S3StorageService {
         } catch (Exception e) {
             log.error("Error downloading PDF {}: {}", key, e.getMessage());
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    public void deleteFile(String key) {
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build());
+            log.info("Deleted file from storage: {}", key);
+        } catch (Exception e) {
+            log.warn("Failed to delete file {} from storage: {}", key, e.getMessage());
         }
     }
 }

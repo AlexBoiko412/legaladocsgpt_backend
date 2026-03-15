@@ -86,6 +86,12 @@ public class StorageController {
         return ResponseEntity.ok().build();
     }
 
+    @DeleteMapping("/delete-raw")
+    public ResponseEntity<Void> deleteRaw(@RequestParam("key") String key) {
+        storageService.deleteFile(key);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/callback")
     public ResponseEntity<Map<String, Object>> onlyOfficeCallback(
             @RequestParam("token") String token,

@@ -9,7 +9,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication
 @ComponentScan(basePackages = "com.legaldocsgpt")
-@EnableFeignClients
+@EnableFeignClients(
+        basePackages = {
+                "com.legaldocsgpt.documentgenerator.client",
+                "com.legaldocsgpt.shared.client"
+        }
+)
 @EnableJpaRepositories(basePackages = "com.legaldocsgpt")
 @EntityScan(basePackages = "com.legaldocsgpt")
 public class DocumentGeneratorApplication {

@@ -16,4 +16,7 @@ public interface StorageClient {
 
     @GetMapping(value = "/download-raw")
     byte[] downloadGeneric(@RequestParam("key") String key);
+
+    @DeleteMapping("/delete-raw")
+    void deleteGeneric(@RequestParam("key") String key);
 }

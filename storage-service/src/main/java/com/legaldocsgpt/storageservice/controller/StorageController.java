@@ -1,8 +1,8 @@
 package com.legaldocsgpt.storageservice.controller;
 
+import com.legaldocsgpt.shared.client.DocumentJobClient;
 import com.legaldocsgpt.shared.dto.EditTokenClaims;
 import com.legaldocsgpt.shared.exception.UnauthorizedException;
-import com.legaldocsgpt.shared.repository.DocumentJobRepository;
 import com.legaldocsgpt.shared.services.EditTokenService;
 import com.legaldocsgpt.storageservice.service.S3StorageService;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ public class StorageController {
 
     private final S3StorageService storageService;
     private final EditTokenService editTokenService;
-    private final DocumentJobRepository documentJobRepository;
+    private final DocumentJobClient documentJobClient;
 
     @GetMapping("/{jobId}.pdf")
     public ResponseEntity<byte[]> downloadPdf(@PathVariable String jobId) {
@@ -56,11 +56,19 @@ public class StorageController {
     @GetMapping("/download-raw")
     public ResponseEntity<byte[]> downloadRaw(
             @RequestParam("key") String key,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        if (key.startsWith("templates/")) {
+            return storageService.downloadFile(key);
+        }
+
+        if (userId == null) {
+            log.warn("Missing X-User-Id for non-template download of key: {}", key);
+            return ResponseEntity.status(403).build();
+        }
 
         String jobId = key.contains(".") ? key.substring(0, key.lastIndexOf('.')) : key;
-
-        boolean owned = documentJobRepository.existsByJobIdAndUserId(jobId, userId);
+        boolean owned = documentJobClient.checkOwnership(jobId, userId);
         if (!owned) {
             log.warn("User {} attempted to download job {} they don't own", userId, jobId);
             return ResponseEntity.status(403).build();

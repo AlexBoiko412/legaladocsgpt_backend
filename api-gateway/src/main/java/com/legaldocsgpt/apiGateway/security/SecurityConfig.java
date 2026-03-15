@@ -17,11 +17,20 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((exchange, ex) -> {
+                            exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
+                            exchange.getResponse().getHeaders()
+                                    .add(org.springframework.http.HttpHeaders.CONTENT_TYPE,
+                                            "application/json");
+                            var body = "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}";
+                            var buffer = exchange.getResponse().bufferFactory()
+                                    .wrap(body.getBytes());
+                            return exchange.getResponse().writeWith(reactor.core.publisher.Mono.just(buffer));
+                        })
+                )
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/api/auth/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/storage/callback").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/storage/download-raw").permitAll()
-                        .anyExchange().authenticated()
+                        .anyExchange().permitAll()
                 )
                 .build();
     }

@@ -56,10 +56,18 @@ public class StorageController {
     @GetMapping("/download-raw")
     public ResponseEntity<byte[]> downloadRaw(
             @RequestParam("key") String key,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        if (key.startsWith("templates/")) {
+            return storageService.downloadFile(key);
+        }
+
+        if (userId == null) {
+            log.warn("Missing X-User-Id for non-template download of key: {}", key);
+            return ResponseEntity.status(403).build();
+        }
 
         String jobId = key.contains(".") ? key.substring(0, key.lastIndexOf('.')) : key;
-
         boolean owned = documentJobClient.checkOwnership(jobId, userId);
         if (!owned) {
             log.warn("User {} attempted to download job {} they don't own", userId, jobId);

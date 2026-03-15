@@ -1,6 +1,7 @@
 package com.legaldocsgpt.documentgenerator.service;
 
 import com.legaldocsgpt.documentgenerator.client.TemplateClient;
+import com.legaldocsgpt.shared.client.StorageClient;
 import com.legaldocsgpt.shared.config.SharedRabbitConfig;
 import com.legaldocsgpt.documentgenerator.dto.*;
 import com.legaldocsgpt.documentgenerator.exception.DocumentJobNotFoundException;
@@ -32,6 +33,7 @@ public class DocumentService {
     private final TemplateClient templateClient;
     private final EditTokenService editTokenService;
     private final OnlyOfficeJwtService onlyOfficeJwtService;
+    private final StorageClient storageClient;
 
     public List<TemplateDefinition> getTemplates() {
         return templateClient.getAllTemplates();
@@ -104,7 +106,11 @@ public class DocumentService {
                 .orElseThrow(() -> new DocumentJobNotFoundException(jobId));
 
         documentJobRepository.deleteByJobIdAndUserId(jobId, UserContextHolder.getUserId());
-        log.info("Document job {} was deleted from the system", jobId);
+
+        storageClient.deleteGeneric(jobId + ".docx");
+        storageClient.deleteGeneric(jobId + ".pdf");
+
+        log.info("Document job {} and associated files deleted", jobId);
     }
 
     public EditorConfigResponse buildEditorConfig(String jobId, String userId) {

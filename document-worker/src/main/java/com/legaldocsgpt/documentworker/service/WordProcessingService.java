@@ -25,30 +25,23 @@ public class WordProcessingService {
     public byte[] assembleDocument(byte[] shellBytes, String content, Map<String, String> userData) throws Exception {
         WordprocessingMLPackage pkg = WordprocessingMLPackage.load(new ByteArrayInputStream(shellBytes));
         MainDocumentPart mdp = pkg.getMainDocumentPart();
+        Body body = mdp.getContents().getBody();
+        List<Object> bodyChildren = body.getContent();
 
         VariablePrepare.prepare(pkg);
-        Map<String, String> mappings = new HashMap<>(userData);
-        mappings.put("CONTENT", "CONTENT_PLACEHOLDER_TEMP");
-        mdp.variableReplace(mappings);
-
-        Body body = mdp.getContents().getBody();
-
-        List<Object> bodyChildren = body.getContent();
 
         int contentIndex = -1;
         for (int i = 0; i < bodyChildren.size(); i++) {
             Object obj = bodyChildren.get(i);
-            if (obj instanceof P p) {
-                String text = extractText(p);
-                if (text.contains("CONTENT_PLACEHOLDER_TEMP")) {
-                    contentIndex = i;
-                    break;
-                }
+            if (obj instanceof P p && extractText(p).contains("${CONTENT}")) {
+                contentIndex = i;
+                break;
             }
         }
 
         if (contentIndex == -1) {
-            log.warn("${CONTENT} placeholder not found in shell document");
+            log.warn("${CONTENT} placeholder not found in shell document — AI content will not be injected");
+            mdp.variableReplace(new HashMap<>(userData));
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             pkg.save(baos);
             return baos.toByteArray();
@@ -56,8 +49,9 @@ public class WordProcessingService {
 
         bodyChildren.remove(contentIndex);
 
-        List<P> replacements = parseMarkdownToParagraphs(content);
+        mdp.variableReplace(new HashMap<>(userData));
 
+        List<P> replacements = parseMarkdownToParagraphs(content);
         for (int i = replacements.size() - 1; i >= 0; i--) {
             bodyChildren.add(contentIndex, replacements.get(i));
         }

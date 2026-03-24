@@ -76,6 +76,11 @@ public class StorageController {
 
         return storageService.downloadFile(key);
     }
+    @GetMapping("/download-internal")
+    public ResponseEntity<byte[]> downloadInternal(@RequestParam("key") String key) {
+        return storageService.downloadFile(key);
+    }
+
 
     @PostMapping(value = "/upload-raw", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<Void> uploadRaw(
@@ -112,21 +117,33 @@ public class StorageController {
 
     private void downloadAndSaveEditedFile(String jobId, String downloadUrl) {
         try {
+            String internalUrl = downloadUrl.replace("localhost:8089", "onlyoffice-ds:80")
+                    .replace("localhost", "onlyoffice-ds");
+
+            log.info("Downloading updated DOCX for job {} from internal URL: {}", jobId, internalUrl);
+
             java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(URI.create(downloadUrl))
+                    .uri(URI.create(internalUrl))
                     .GET()
                     .build();
 
-            byte[] content = httpClient.send(request,
-                    java.net.http.HttpResponse.BodyHandlers.ofByteArray()).body();
+            java.net.http.HttpResponse<byte[]> response = httpClient.send(request,
+                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
 
-            String fileName = jobId + ".docx";
-            String contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            storageService.uploadFile(fileName, contentType, content);
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("OnlyOffice download failed with status: " + response.statusCode());
+            }
+
+            byte[] content = response.body();
+            storageService.uploadFile(jobId + ".docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    content);
+
+            log.info("Successfully updated Minio with edited file for job {}", jobId);
 
         } catch (Exception e) {
-            log.error("Failed to download and save edited file for job {}: {}", jobId, e.getMessage());
+            log.error("CRITICAL: Failed to save OnlyOffice changes: {}", e.getMessage());
             throw new RuntimeException("Failed to save OnlyOffice callback file", e);
         }
     }

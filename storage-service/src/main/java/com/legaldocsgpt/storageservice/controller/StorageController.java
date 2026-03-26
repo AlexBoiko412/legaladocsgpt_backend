@@ -40,14 +40,15 @@ public class StorageController {
         try {
             claims = editTokenService.verify(token);
         } catch (UnauthorizedException e) {
+            log.warn("Invalid edit token");
             return ResponseEntity.status(403).build();
         }
 
         String key = claims.jobId() + ".docx";
-        log.info("OnlyOffice fetching DOCX for job {}", claims.jobId());
+        log.info("OnlyOffice fetching DOCX for job: {}", claims.jobId());
+
         return storageService.downloadFile(key);
     }
-
     /**
      * Called by the browser/frontend to download a document.
      * X-User-Id is injected by the gateway after JWT validation.
@@ -102,14 +103,27 @@ public class StorageController {
             @RequestParam("token") String token,
             @RequestBody Map<String, Object> body) {
 
-        Integer status = (Integer) body.get("status");
-        String jobId = (String) body.get("key");
+        EditTokenClaims claims;
+        try {
+            claims = editTokenService.verify(token);
+        } catch (UnauthorizedException e) {
+            log.warn("Invalid edit token on callback");
+            return ResponseEntity.status(403).body(Map.of("error", 1));
+        }
 
-        log.info("Received OnlyOffice callback for job {} with status {}", jobId, status);
+        Integer status = (Integer) body.get("status");
+        String jobId = claims.jobId();
+
+        log.info("Callback received - status: {}, jobId: {}", status, jobId);
 
         if (status == 2 || status == 6) {
             String downloadUrl = (String) body.get("url");
-            downloadAndSaveEditedFile(jobId, downloadUrl);
+            if (downloadUrl != null) {
+                downloadAndSaveEditedFile(jobId, downloadUrl);
+                log.info("Saved OnlyOffice edits to MinIO for job {} (status {})", jobId, status);
+            } else {
+                log.warn("Callback status {} received but no URL provided for job {}", status, jobId);
+            }
         }
 
         return ResponseEntity.ok(Map.of("error", 0));

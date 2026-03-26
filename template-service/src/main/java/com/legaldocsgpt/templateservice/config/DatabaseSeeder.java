@@ -91,11 +91,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 
             repository.save(template);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            log.error("Template file not found for '{}': {} — skipping", name, fileName);
         } catch (Exception e) {
-            log.error("Failed to seed template {}: {}", name, e.getMessage());
+            log.error("Failed to seed template '{}': {} — skipping", name, e.getMessage());
         }
-
-        log.info("Successfully seeded {} templates.", repository.count());
     }
 }

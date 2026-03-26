@@ -22,36 +22,70 @@ public class WordProcessingService {
 
     private static final org.docx4j.wml.ObjectFactory WML_FACTORY = new org.docx4j.wml.ObjectFactory();
 
+    public String extractContent(byte[] docxBytes) throws Exception {
+        WordprocessingMLPackage pkg = WordprocessingMLPackage.load(new ByteArrayInputStream(docxBytes));
+        StringBuilder sb = new StringBuilder();
+        boolean inBody = true;
+
+        for (Object obj : pkg.getMainDocumentPart().getContents().getBody().getContent()) {
+            if (obj instanceof P p) {
+                String text = extractText(p).trim();
+                if (text.isBlank()) continue;
+
+                String upper = text.toUpperCase();
+                // Stop extracting at the signature block.
+                // Assumes shell templates use "SIGNATURES" or "EMPLOYER SIGNATURE"
+                // as the heading before the signature lines. If a custom template
+                // uses a different heading, content extraction may include signature lines.
+                if (upper.contains("SIGNATURES") || upper.contains("EMPLOYER SIGNATURE")) {
+                    inBody = false;
+                    break;
+                }
+
+                sb.append(text).append("\n\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
     public byte[] assembleDocument(byte[] shellBytes, String content, Map<String, String> userData) throws Exception {
         WordprocessingMLPackage pkg = WordprocessingMLPackage.load(new ByteArrayInputStream(shellBytes));
         MainDocumentPart mdp = pkg.getMainDocumentPart();
-        Body body = mdp.getContents().getBody();
-        List<Object> bodyChildren = body.getContent();
 
-        VariablePrepare.prepare(pkg);
-
+        List<Object> bodyChildrenPre = mdp.getContents().getBody().getContent();
         int contentIndex = -1;
-        for (int i = 0; i < bodyChildren.size(); i++) {
-            Object obj = bodyChildren.get(i);
-            if (obj instanceof P p && extractText(p).contains("${CONTENT}")) {
-                contentIndex = i;
-                break;
+        for (int i = 0; i < bodyChildrenPre.size(); i++) {
+            if (bodyChildrenPre.get(i) instanceof P p) {
+                String text = extractText(p).trim();
+                if (text.equals("${CONTENT}") || text.equals("CONTENT")) {
+                    contentIndex = i;
+                    break;
+                }
             }
         }
 
         if (contentIndex == -1) {
-            log.warn("${CONTENT} placeholder not found in shell document — AI content will not be injected");
+            log.warn("${CONTENT} placeholder not found — AI content will not be injected");
+            VariablePrepare.prepare(pkg);
             mdp.variableReplace(new HashMap<>(userData));
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             pkg.save(baos);
             return baos.toByteArray();
         }
 
-        bodyChildren.remove(contentIndex);
+        VariablePrepare.prepare(pkg);
+
+        List<Object> bodyChildren = mdp.getContents().getBody().getContent();
 
         mdp.variableReplace(new HashMap<>(userData));
 
+        bodyChildren = mdp.getContents().getBody().getContent();
+
+        bodyChildren.remove(contentIndex);
+
         List<P> replacements = parseMarkdownToParagraphs(content);
+        log.info("Inserting {} paragraphs at index {} (content length: {})",
+                replacements.size(), contentIndex, content != null ? content.length() : 0);
         for (int i = replacements.size() - 1; i >= 0; i--) {
             bodyChildren.add(contentIndex, replacements.get(i));
         }
@@ -60,6 +94,7 @@ public class WordProcessingService {
         pkg.save(baos);
         return baos.toByteArray();
     }
+
 
     private String extractText(P p) {
         StringBuilder sb = new StringBuilder();
@@ -77,7 +112,14 @@ public class WordProcessingService {
 
     private List<P> parseMarkdownToParagraphs(String markdown) {
         List<P> result = new ArrayList<>();
-        String[] lines = markdown.split("\n");
+
+        if (markdown == null || markdown.isBlank()) {
+            log.warn("Empty or null content passed to parseMarkdownToParagraphs");
+            return result;
+        }
+
+        String normalised = markdown.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = normalised.split("\n");
 
         for (String line : lines) {
             String trimmed = line.trim();

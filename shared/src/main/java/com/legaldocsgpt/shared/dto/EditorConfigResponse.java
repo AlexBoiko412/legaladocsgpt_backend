@@ -99,8 +99,15 @@ public class EditorConfigResponse {
 
         /** Info about the currently logged-in user shown in the editor UI. */
         private User user;
+        private Customization customization;
     }
-
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Customization {
+        private boolean forcesave;
+    }
     @Data
     @Builder
     @NoArgsConstructor

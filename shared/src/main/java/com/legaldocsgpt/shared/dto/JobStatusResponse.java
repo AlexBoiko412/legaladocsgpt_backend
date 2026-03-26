@@ -12,8 +12,8 @@ public class JobStatusResponse {
     private String jobId;
     private String status;
     private String title;
-    private String fileUrl;
     private String docxUrl;
+    private String pdfUrl;
     private String errorDetails;
     private String generatedContent;
 

@@ -1,7 +1,6 @@
 package com.legaldocsgpt.documentworker.service.provider;
 
 import com.legaldocsgpt.documentworker.exception.AiProviderException;
-import com.legaldocsgpt.shared.exception.ThirdPartyApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -71,16 +70,5 @@ public class OpenAIProvider implements AIProvider {
                 .block();
 
         return response;
-    }
-
-    public String handleAiFallback(String prompt, Throwable t) {
-        log.error("Circuit Breaker OPEN or AI Provider failed. Reason: {}", t.getMessage());
-
-        if (t instanceof AiProviderException) {
-            throw (AiProviderException) t;
-        }
-
-        throw new ThirdPartyApiException(providerName,
-                "The AI service is currently overloaded or unresponsive. Please try again in a few minutes.");
     }
 }

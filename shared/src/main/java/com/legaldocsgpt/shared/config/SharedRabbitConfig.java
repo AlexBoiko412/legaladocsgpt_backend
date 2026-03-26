@@ -19,6 +19,12 @@ public class SharedRabbitConfig {
     public static final String DLX_NAME           = "document_exchange.dlx";
     public static final String DLQ_ROUTING_KEY    = "document_routing_key.dlq";
 
+    public static final String CONVERT_ROUTING_KEY = "document.convert";
+
+    @Bean
+    public Binding convertBinding(Queue documentQueue, TopicExchange documentExchange) {
+        return BindingBuilder.bind(documentQueue).to(documentExchange).with(CONVERT_ROUTING_KEY);
+    }
 
     @Bean
     public Queue documentQueue() {

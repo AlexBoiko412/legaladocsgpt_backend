@@ -24,6 +24,13 @@ public class S3StorageService {
     private String bucketName;
 
     public void uploadFile(String fileName, String contentType, byte[] content) {
+        if (content == null || content.length == 0) {
+            log.error("Attempted to upload empty content for file: {}", fileName);
+            return;
+        }
+
+        log.info("Uploading {} bytes to MinIO as {}", content.length, fileName);
+
         s3Client.putObject(
                 PutObjectRequest.builder()
                         .bucket(bucketName)
@@ -32,6 +39,8 @@ public class S3StorageService {
                         .build(),
                 RequestBody.fromBytes(content)
         );
+
+        log.info("Successfully uploaded {} to MinIO", fileName);
     }
 
     public ResponseEntity<byte[]> downloadFile(String path) {

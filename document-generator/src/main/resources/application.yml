@@ -29,5 +29,10 @@ edit:
 
 
 onlyoffice:
+  internal-url: ${ONLYOFFICE_INTERNAL_URL:http://onlyoffice-ds:80}
   jwt:
     secret: ${ONLYOFFICE_JWT_SECRET}
+
+storage:
+  service:
+    url: ${STORAGE_SERVICE_URL:http://storage-service:8084}

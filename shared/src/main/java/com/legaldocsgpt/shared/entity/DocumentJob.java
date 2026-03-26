@@ -1,5 +1,6 @@
 package com.legaldocsgpt.shared.entity;
 
+import com.legaldocsgpt.shared.services.MapToJsonConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Entity
 @Data
@@ -26,6 +28,10 @@ public class DocumentJob {
 
     @Column(nullable = false)
     private String userId;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int version = 1;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -54,9 +60,17 @@ public class DocumentJob {
     @Column(columnDefinition = "TEXT")
     private String generatedContent;
 
-    private String fileUrl;
+    private String docxUrl;
+    private String pdfUrl;
 
     private String errorDetails;
+
+    @Column(name = "template_path")
+    private String templatePath;
+
+    @Column(name = "document_data", columnDefinition = "TEXT")
+    @Convert(converter = MapToJsonConverter.class)
+    private Map<String, String> documentData;
 
 
 }

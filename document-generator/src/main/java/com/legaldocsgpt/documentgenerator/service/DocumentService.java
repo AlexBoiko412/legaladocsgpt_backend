@@ -133,6 +133,16 @@ public class DocumentService {
         triggerForceSaveAndPublishConvert(jobId, userId);
     }
 
+    @Transactional
+    public void renameDocument(String jobId, String newTitle) {
+        String userId = UserContextHolder.getUserId();
+        DocumentJob job = documentJobRepository.findByJobIdAndUserId(jobId, userId)
+                .orElseThrow(() -> new DocumentJobNotFoundException(jobId));
+        job.setTitle(newTitle);
+        documentJobRepository.save(job);
+        log.info("Job {} renamed to '{}'", jobId, newTitle);
+    }
+
     private void requestOnlyOfficeForceSave(String jobId) {
         try {
             DocumentJob job = documentJobRepository.findByJobId(jobId).orElse(null);

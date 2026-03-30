@@ -3,7 +3,6 @@ package com.legaldocsgpt.authservice.controller;
 import com.legaldocsgpt.authservice.dto.ChangePasswordRequest;
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
 import com.legaldocsgpt.authservice.dto.UserProfileResponse;
-import com.legaldocsgpt.authservice.dto.UserTokenInfo;
 import com.legaldocsgpt.authservice.exception.InvalidCredentialsException;
 import com.legaldocsgpt.authservice.service.AuthService;
 import jakarta.servlet.http.Cookie;

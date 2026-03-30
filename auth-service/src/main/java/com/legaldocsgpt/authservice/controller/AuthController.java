@@ -1,7 +1,8 @@
 package com.legaldocsgpt.authservice.controller;
 
+import com.legaldocsgpt.authservice.dto.ChangePasswordRequest;
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
-import com.legaldocsgpt.authservice.dto.UserTokenInfo;
+import com.legaldocsgpt.authservice.dto.UserProfileResponse;
 import com.legaldocsgpt.authservice.exception.InvalidCredentialsException;
 import com.legaldocsgpt.authservice.service.AuthService;
 import jakarta.servlet.http.Cookie;
@@ -59,14 +60,24 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserTokenInfo> getUserInfo(
+    public ResponseEntity<UserProfileResponse> getUserInfo(
             @CookieValue(name = "token", required = false) String token) {
+        if (token == null || token.isEmpty()) {
+            throw new InvalidCredentialsException();
+        }
+        return ResponseEntity.ok(authService.getUserProfile(token));
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<?> changePassword(
+            @CookieValue(name = "token", required = false) String token,
+            @RequestBody ChangePasswordRequest request) {
 
         if (token == null || token.isEmpty()) {
             throw new InvalidCredentialsException();
         }
-
-        return ResponseEntity.ok(authService.getDecryptedToken(token));
+        authService.changePassword(token, request.getCurrentPassword(), request.getNewPassword());
+        return ResponseEntity.ok().build();
     }
 
 

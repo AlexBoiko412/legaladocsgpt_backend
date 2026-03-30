@@ -1,6 +1,7 @@
 package com.legaldocsgpt.authservice.service;
 
 import com.legaldocsgpt.authservice.dto.UserInfoResponseDto;
+import com.legaldocsgpt.authservice.dto.UserProfileResponse;
 import com.legaldocsgpt.authservice.dto.UserTokenInfo;
 import com.legaldocsgpt.authservice.entity.User;
 import com.legaldocsgpt.authservice.exception.InvalidCredentialsException;
@@ -83,6 +84,46 @@ public class AuthService {
         }
 
         return userInfo;
+    }
+
+    public UserProfileResponse getUserProfile(String token) {
+        UserTokenInfo info = jwtUtil.validateToken(token);
+        if (info == null) throw new InvalidCredentialsException();
+
+        User user = userRepository.findByEmail(info.getEmail())
+                .orElseThrow(UserNotFoundException::new);
+
+        return new UserProfileResponse(
+                user.getEmail(),
+                user.getUsername(),
+                user.getRole(),
+                user.getProvider() != null ? user.getProvider() : "LOCAL"
+        );
+    }
+
+    public void changePassword(String token, String currentPassword, String newPassword) {
+        UserTokenInfo info = jwtUtil.validateToken(token);
+        if (info == null) throw new InvalidCredentialsException();
+
+        User user = userRepository.findByEmail(info.getEmail())
+                .orElseThrow(UserNotFoundException::new);
+
+        if (!"LOCAL".equals(user.getProvider())) {
+            throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT,
+                    "Password cannot be changed for Google accounts");
+        }
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new InvalidCredentialsException();
+        }
+
+        if (newPassword == null || newPassword.length() < 8) {
+            throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT,
+                    "New password must be at least 8 characters");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
     }
 
     private User findByUsernameOrEmail(String username, String email) {

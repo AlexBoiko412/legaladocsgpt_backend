@@ -2,6 +2,8 @@ package com.legaldocsgpt.documentgenerator.controller;
 
 import com.legaldocsgpt.documentgenerator.dto.FinalizeRequest;
 import com.legaldocsgpt.documentgenerator.dto.GenerateResponse;
+import com.legaldocsgpt.documentgenerator.dto.RenameRequest;
+import com.legaldocsgpt.documentgenerator.exception.ValidationException;
 import com.legaldocsgpt.documentgenerator.service.DocumentService;
 import com.legaldocsgpt.shared.context.UserContextHolder;
 import com.legaldocsgpt.shared.dto.*;
@@ -20,6 +22,17 @@ public class DocumentController {
     @GetMapping("/ownership")
     public ResponseEntity<Boolean> checkOwnership(@RequestParam String jobId, @RequestParam String userId) {
         return ResponseEntity.ok(documentService.checkOwnership(jobId, userId));
+    }
+
+    @PatchMapping("/{jobId}/title")
+    public ResponseEntity<Void> renameDocument(
+            @PathVariable String jobId,
+            @RequestBody RenameRequest request) {
+        if (request.getTitle() == null || request.getTitle().isBlank()) {
+            throw new ValidationException("Title cannot be empty");
+        }
+        documentService.renameDocument(jobId, request.getTitle().trim());
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/templates")

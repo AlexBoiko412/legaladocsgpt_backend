@@ -58,6 +58,10 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         UserInfoResponseDto cachedUser = tokenCache.getIfPresent(token);
         if (cachedUser != null) {
             log.debug("Token cache hit for user {}", cachedUser.getId());
+            if (isAdminPath(path) && !isAdmin(cachedUser)) {
+                return handleForbidden(exchange);
+            }
+
             return chain.filter(withUserHeader(exchange, cachedUser));
         }
 
@@ -69,26 +73,27 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
                 .toEntity(UserInfoResponseDto.class)
                 .flatMap(response -> {
                     UserInfoResponseDto user = response.getBody();
-
                     if (user == null || user.getId() == null) {
                         return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
                     }
-
-                    ServerWebExchange mutatedExchange = exchange.mutate()
-                            .request(r -> r.header("X-User-Id", String.valueOf(user.getId())))
-                            .build();
-
-                    return chain.filter(mutatedExchange);
+                    tokenCache.put(token, user);
+                    if (isAdminPath(path) && !isAdmin(user)) {
+                        return handleForbidden(exchange);
+                    }
+                    return chain.filter(withUserHeader(exchange, user));
                 })
                 .onErrorResume(err -> {
-                    log.error("Error validating token: {}", err.getMessage());
+                    log.warn("Token validation failed: {}", err.getMessage());
+                    tokenCache.invalidate(token);
                     return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
                 });
     }
 
     private ServerWebExchange withUserHeader(ServerWebExchange exchange, UserInfoResponseDto user) {
         return exchange.mutate()
-                .request(r -> r.header("X-User-Id", String.valueOf(user.getId())))
+                .request(r -> r
+                        .header("X-User-Id", String.valueOf(user.getId()))
+                        .header("X-User-Role", user.getRole()))
                 .build();
     }
 
@@ -98,6 +103,14 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
                 path.contains("/api/auth/oauth2/") ||
                 path.contains("/api/storage/download-editing") ||
                 path.contains("/api/storage/callback");
+    }
+
+    private boolean isAdminPath(String path) {
+        return path.startsWith("/api/templates/admin");
+    }
+
+    private boolean isAdmin(UserInfoResponseDto user) {
+        return "ROLE_ADMIN".equals(user.getRole());
     }
 
     @Override
@@ -125,5 +138,14 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
             log.error("Error serializing error response", e);
             return exchange.getResponse().setComplete();
         }
+    }
+
+    private Mono<Void> handleForbidden(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.FORBIDDEN);
+        exchange.getResponse().getHeaders().add(HttpHeaders.CONTENT_TYPE, "application/json");
+        var body = "{\"code\":\"AUTH_103\",\"message\":\"Admin access required\"}";
+        DataBuffer buffer = exchange.getResponse().bufferFactory()
+                .wrap(body.getBytes());
+        return exchange.getResponse().writeWith(Mono.just(buffer));
     }
 }

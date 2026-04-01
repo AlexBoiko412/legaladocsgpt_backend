@@ -8,10 +8,7 @@ import com.legaldocsgpt.documentworker.service.prompt.PromptBuilder;
 import com.legaldocsgpt.documentworker.service.provider.OpenAIProvider;
 import com.legaldocsgpt.shared.client.StorageClient;
 import com.legaldocsgpt.shared.config.SharedRabbitConfig;
-import com.legaldocsgpt.shared.dto.DocumentConvertEvent;
-import com.legaldocsgpt.shared.dto.DocumentFinalizeEvent;
-import com.legaldocsgpt.shared.dto.DocumentGenerationEvent;
-import com.legaldocsgpt.shared.dto.TemplateDefinition;
+import com.legaldocsgpt.shared.dto.*;
 import com.legaldocsgpt.shared.entity.DocumentJob;
 import com.legaldocsgpt.shared.entity.JobStatus;
 import lombok.RequiredArgsConstructor;
@@ -73,27 +70,32 @@ public class DocumentWorker {
             jobService.updateStatus(jobId, userId, JobStatus.IN_PROGRESS);
 
             TemplateDefinition template = templateClient.getTemplateById(event.getTemplateId());
-            String templatePath = template.getDocxPath();
-
 
             String finalPrompt = promptBuilder.buildFinalPrompt(event);
             String generatedContent = aiProvider.generateText(finalPrompt);
-            log.info("AI generated {} chars for job {}",
-                    generatedContent != null ? generatedContent.length() : 0, jobId);
 
-            byte[] shellBytes = storageClient.downloadInternal(templatePath);
-            byte[] assembledDocx = wordService.assembleDocument(shellBytes, generatedContent, event.getData());
+            byte[] shellBytes = storageClient.downloadInternal(template.getDocxPath());
+            byte[] assembledDocx = wordService.assembleDocument(
+                    shellBytes, generatedContent, event.getData());
+
             String docxUrl = jobId + ".docx";
+            String snapshotKey = "versions/" + jobId + "/v1.docx";
+
             storageClient.uploadGeneric(docxUrl,
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     assembledDocx);
 
-            byte[] pdfBytes = wordToPdfService.convertToPdf(assembledDocx, docxUrl);
+            storageClient.uploadGeneric(snapshotKey,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    assembledDocx);
 
+            byte[] pdfBytes = wordToPdfService.convertToPdf(assembledDocx, docxUrl);
             String pdfUrl = jobId + ".pdf";
             storageClient.uploadGeneric(pdfUrl, "application/pdf", pdfBytes);
 
-            jobService.completeJob(jobId, userId, docxUrl, pdfUrl, generatedContent);
+            jobService.completeJob(jobId, userId, docxUrl, pdfUrl,
+                    generatedContent, null, snapshotKey);
+
             log.info("Job {} completed successfully", jobId);
 
         } catch (AiProviderException e) {
@@ -109,44 +111,44 @@ public class DocumentWorker {
     public void processFinalizeEvent(DocumentFinalizeEvent event) {
         String jobId = event.getJobId();
         String userId = event.getUserId();
-        log.info("AI REFINEMENT STARTED for job: {} ", jobId);
+        log.info("AI REFINEMENT STARTED for job: {}", jobId);
 
         try {
-            DocumentJob job = jobService.getJob(jobId, event.getUserId());
+            DocumentJob job = jobService.getJob(jobId, userId);
             String docxName = jobId + ".docx";
 
             byte[] shellBytes = storageClient.downloadInternal(job.getTemplatePath());
-            log.info("Downloaded clean template shell. Size: {} bytes", shellBytes.length);
-
             byte[] currentDocx = storageClient.downloadInternal(docxName);
             String currentBody = wordService.extractContent(currentDocx);
-            log.info("Extracted current body for AI context. Length: {} chars", currentBody.length());
 
             String aiPrompt = buildRefinementPrompt(currentBody, event.getRefinementPrompt());
             String newBody = aiProvider.generateText(aiPrompt);
-            log.info("AI returned new body. Length: {} chars", newBody != null ? newBody.length() : 0);
 
             if (newBody == null || newBody.trim().isEmpty()) {
                 throw new RuntimeException("AI returned empty body");
             }
 
-            Map<String, String> data = new HashMap<>(job.getDocumentData() != null ? job.getDocumentData() : new HashMap<>());
-
+            Map<String, String> data = new HashMap<>(
+                    job.getDocumentData() != null ? job.getDocumentData() : new HashMap<>());
             byte[] refinedDocx = wordService.assembleDocument(shellBytes, newBody, data);
-            log.info("Assembled refined document using clean shell. New size: {} bytes", refinedDocx.length);
+
+            String snapshotKey = "versions/" + jobId + "/v" + job.getVersion() + ".docx";
+            storageClient.uploadGeneric(snapshotKey,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    currentDocx);  // ← old bytes, not refinedDocx
+            log.info("Snapshotted v{} to {}", job.getVersion(), snapshotKey);
 
             storageClient.uploadGeneric(docxName,
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     refinedDocx);
-            log.info("Upload completed for {}", docxName);
 
             byte[] pdfBytes = wordToPdfService.convertToPdf(refinedDocx, docxName);
-            String pdfName = jobId + ".pdf";
-            storageClient.uploadGeneric(pdfName, "application/pdf", pdfBytes);
+            storageClient.uploadGeneric(jobId + ".pdf", "application/pdf", pdfBytes);
 
-            jobService.completeJob(jobId, event.getUserId(), docxName, job.getPdfUrl(), newBody);
+            jobService.completeJob(jobId, userId, docxName, jobId + ".pdf",
+                    newBody.trim(), event.getRefinementPrompt(), snapshotKey);
 
-            log.info("REFINEMENT COMPLETED SUCCESSFULLY for job {}", jobId);
+            log.info("=== REFINEMENT COMPLETED SUCCESSFULLY for job {} ===", jobId);
 
         } catch (AiProviderException e) {
             log.error("AI refinement failed for job {}: {}", jobId, e.getMessage());
@@ -171,12 +173,45 @@ public class DocumentWorker {
             byte[] pdfBytes = wordToPdfService.convertToPdf(currentDocx, docxName);
             storageClient.uploadGeneric(pdfName, "application/pdf", pdfBytes);
 
-            jobService.completeJob(jobId, userId, docxName, pdfName, null);
+            jobService.completeJob(jobId, userId, docxName, pdfName, null, null, null);
             log.info("PDF sync complete for job: {}", jobId);
 
         } catch (Exception e) {
             log.error("Conversion failed for job {}: {}", jobId, e.getMessage());
             jobService.failJob(jobId, userId, "PDF conversion failed: " + e.getMessage());
+        }
+    }
+
+    @RabbitHandler
+    public void handleRestore(DocumentRestoreEvent event) {
+        String jobId = event.getJobId();
+        String userId = event.getUserId();
+
+        try {
+            String docxName = jobId + ".docx";
+
+            byte[] currentDocx = storageClient.downloadInternal(docxName);
+
+            String snapshotKey = "versions/" + jobId + "/v" + event.getRestoringToVersion() + "_pre_restore.docx";
+            storageClient.uploadGeneric(snapshotKey,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    currentDocx);
+
+            byte[] snapshotBytes = storageClient.downloadInternal(event.getSnapshotDocxKey());
+            storageClient.uploadGeneric(docxName,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    snapshotBytes);
+
+            byte[] pdfBytes = wordToPdfService.convertToPdf(snapshotBytes, docxName);
+            storageClient.uploadGeneric(jobId + ".pdf", "application/pdf", pdfBytes);
+
+            jobService.completeJobRestore(jobId, userId, docxName, jobId + ".pdf",
+                    event.getSnapshotContent(), snapshotKey);
+
+        } catch (Exception e) {
+            log.error("Restore failed for job {}: {}", jobId, e.getMessage());
+            jobService.failJob(jobId, userId, "Restore failed: " + e.getMessage());
+            throw new RuntimeException(e);
         }
     }
 

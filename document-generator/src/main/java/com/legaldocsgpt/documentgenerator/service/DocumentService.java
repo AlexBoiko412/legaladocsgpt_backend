@@ -10,9 +10,11 @@ import com.legaldocsgpt.documentgenerator.exception.ValidationException;
 import com.legaldocsgpt.shared.context.UserContextHolder;
 import com.legaldocsgpt.shared.dto.*;
 import com.legaldocsgpt.shared.entity.DocumentJob;
+import com.legaldocsgpt.shared.entity.DocumentVersion;
 import com.legaldocsgpt.shared.entity.JobStatus;
 import com.legaldocsgpt.shared.exception.UnauthorizedException;
 import com.legaldocsgpt.shared.repository.DocumentJobRepository;
+import com.legaldocsgpt.shared.repository.DocumentVersionRepository;
 import com.legaldocsgpt.shared.services.EditTokenService;
 import com.legaldocsgpt.shared.services.OnlyOfficeJwtService;
 import jakarta.transaction.Transactional;
@@ -40,6 +42,7 @@ public class DocumentService {
     private final OnlyOfficeJwtService onlyOfficeJwtService;
     private final StorageClient storageClient;
     private final WebClient webClient;
+    private final DocumentVersionRepository documentVersionRepository;
 
     @Value("${onlyoffice.internal-url}")
     private String onlyOfficeInternalUrl;
@@ -53,7 +56,7 @@ public class DocumentService {
                            EditTokenService editTokenService,
                            OnlyOfficeJwtService onlyOfficeJwtService,
                            StorageClient storageClient,
-                           WebClient.Builder webClientBuilder) {
+                           WebClient.Builder webClientBuilder, DocumentVersionRepository documentVersionRepository) {
         this.documentJobRepository = documentJobRepository;
         this.rabbitTemplate = rabbitTemplate;
         this.templateClient = templateClient;
@@ -61,6 +64,7 @@ public class DocumentService {
         this.onlyOfficeJwtService = onlyOfficeJwtService;
         this.storageClient = storageClient;
         this.webClient = webClientBuilder.build();
+        this.documentVersionRepository = documentVersionRepository;
     }
 
     public List<TemplateDefinition> getTemplates() {
@@ -264,6 +268,79 @@ public class DocumentService {
 
     public boolean checkOwnership(String jobId, String userId) {
         return documentJobRepository.existsByJobIdAndUserId(jobId, userId);
+    }
+
+    public List<DocumentVersionResponse> getVersions(String jobId, String userId) {
+        documentJobRepository.findByJobIdAndUserId(jobId, userId)
+                .orElseThrow(() -> new DocumentJobNotFoundException(jobId));
+
+        return documentVersionRepository
+                .findByJobIdAndUserIdOrderByVersionDesc(jobId, userId)
+                .stream()
+                .map(v -> DocumentVersionResponse.builder()
+                        .id(v.getId())
+                        .version(v.getVersion())
+                        .source(v.getSource())
+                        .content(v.getContent())
+                        .docxKey(v.getDocxKey())
+                        .createdAt(v.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
+    @Transactional
+    public void restoreVersion(String jobId, int version, String userId) {
+        documentJobRepository.findByJobIdAndUserId(jobId, userId)
+                .orElseThrow(() -> new DocumentJobNotFoundException(jobId));
+
+        DocumentVersion snap = documentVersionRepository
+                .findByJobIdAndUserIdOrderByVersionDesc(jobId, userId)
+                .stream()
+                .filter(v -> v.getVersion() == version)
+                .findFirst()
+                .orElseThrow(() -> new DocumentJobNotFoundException(
+                        "Version " + version + " not found for job " + jobId));
+
+
+        requestOnlyOfficeDropSession(jobId);
+
+        documentJobRepository.findByJobIdAndUserId(jobId, userId)
+                .ifPresent(job -> {
+                    job.setStatus(JobStatus.IN_PROGRESS);
+                    documentJobRepository.save(job);
+                });
+
+        rabbitTemplate.convertAndSend(
+                SharedRabbitConfig.EXCHANGE_NAME,
+                SharedRabbitConfig.RESTORE_ROUTING_KEY,
+                new DocumentRestoreEvent(jobId, userId,
+                        snap.getDocxKey(), snap.getContent(), version));
+    }
+
+    private void requestOnlyOfficeDropSession(String jobId) {
+        try {
+            DocumentJob job = documentJobRepository.findByJobId(jobId).orElse(null);
+            if (job == null) return;
+
+            Map<String, Object> body = Map.of(
+                    "c", "drop",
+                    "key", jobId + "_v" + job.getVersion(),
+                    "users", List.of()
+            );
+
+            webClient.post()
+                    .uri(onlyOfficeInternalUrl + "/coauthoring/CommandService.ashx")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .timeout(Duration.ofSeconds(5))
+                    .doOnSuccess(r -> log.info("Session dropped for job {}", jobId))
+                    .doOnError(e -> log.warn("Could not drop session for job {}: {}", jobId, e.getMessage()))
+                    .subscribe();
+        } catch (Exception e) {
+            log.warn("Could not drop OnlyOffice session for job {}: {}", jobId, e.getMessage());
+        }
     }
 
     private JobStatusResponse mapToResponse(DocumentJob job) {

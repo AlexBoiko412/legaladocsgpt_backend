@@ -1,5 +1,6 @@
 package com.legaldocsgpt.documentgenerator.controller;
 
+import com.legaldocsgpt.documentgenerator.dto.DocumentVersionResponse;
 import com.legaldocsgpt.documentgenerator.dto.FinalizeRequest;
 import com.legaldocsgpt.documentgenerator.dto.GenerateResponse;
 import com.legaldocsgpt.documentgenerator.dto.RenameRequest;
@@ -84,5 +85,20 @@ public class DocumentController {
     public ResponseEntity<EditorConfigResponse> getEditorConfig(@PathVariable String jobId) {
         String userId = UserContextHolder.getUserId();
         return ResponseEntity.ok(documentService.buildEditorConfig(jobId, userId));
+    }
+
+    @GetMapping("/{jobId}/versions")
+    public ResponseEntity<List<DocumentVersionResponse>> getVersions(@PathVariable String jobId) {
+        String userId = UserContextHolder.getUserId();
+        return ResponseEntity.ok(documentService.getVersions(jobId, userId));
+    }
+
+    @PostMapping("/{jobId}/versions/{version}/rsjdjepestore")
+    public ResponseEntity<Void> restoreVersion(
+            @PathVariable String jobId,
+            @PathVariable int version) {
+        String userId = UserContextHolder.getUserId();
+        documentService.restoreVersion(jobId, version, userId);
+        return ResponseEntity.accepted().build();
     }
 }

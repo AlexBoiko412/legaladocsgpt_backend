@@ -1,6 +1,5 @@
 package com.legaldocsgpt.documentworker.service;
 
-import com.legaldocsgpt.shared.client.StorageClient;
 import com.legaldocsgpt.shared.entity.DocumentJob;
 import com.legaldocsgpt.shared.entity.DocumentVersion;
 import com.legaldocsgpt.shared.entity.JobStatus;
@@ -19,7 +18,6 @@ import java.time.LocalDateTime;
 public class DocumentJobInternalService {
     private final DocumentJobRepository repository;
     private final DocumentVersionRepository versionRepository;
-    private final StorageClient storageClient;
 
     @Transactional
     public void completeJob(String jobId, String userId, String docxUrl,

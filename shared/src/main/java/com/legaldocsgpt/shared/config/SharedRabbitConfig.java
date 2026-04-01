@@ -21,6 +21,13 @@ public class SharedRabbitConfig {
 
     public static final String CONVERT_ROUTING_KEY = "document.convert";
 
+    public static final String RESTORE_ROUTING_KEY = "document.restore";
+
+    @Bean
+    public Binding restoreBinding(Queue documentQueue, TopicExchange documentExchange) {
+        return BindingBuilder.bind(documentQueue).to(documentExchange).with(RESTORE_ROUTING_KEY);
+    }
+
     @Bean
     public Binding convertBinding(Queue documentQueue, TopicExchange documentExchange) {
         return BindingBuilder.bind(documentQueue).to(documentExchange).with(CONVERT_ROUTING_KEY);

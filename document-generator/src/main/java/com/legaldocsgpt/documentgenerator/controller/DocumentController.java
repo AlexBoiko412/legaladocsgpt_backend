@@ -93,7 +93,7 @@ public class DocumentController {
         return ResponseEntity.ok(documentService.getVersions(jobId, userId));
     }
 
-    @PostMapping("/{jobId}/versions/{version}/rsjdjepestore")
+    @PostMapping("/{jobId}/versions/{version}/restore")
     public ResponseEntity<Void> restoreVersion(
             @PathVariable String jobId,
             @PathVariable int version) {

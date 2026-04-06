@@ -1,31 +1,22 @@
-FROM maven:3.9.9-eclipse-temurin-21 AS base
+ARG BASE_IMAGE=legaldocsgpt-base:latest
+FROM ${BASE_IMAGE} AS build
 WORKDIR /app
 
-COPY pom.xml .
-COPY shared/pom.xml ./shared/
-COPY auth-service/pom.xml ./auth-service/
-COPY api-gateway/pom.xml ./api-gateway/
-COPY document-generator/pom.xml ./document-generator/
-COPY document-worker/pom.xml ./document-worker/
-COPY storage-service/pom.xml ./storage-service/
-COPY template-service/pom.xml ./template-service/
+COPY shared/src       ./shared/src
+COPY auth-service/src ./auth-service/src
 
-RUN mvn dependency:go-offline -B
-
-FROM base AS dev
-ARG SERVICE_PATH
-ENV SERVICE_PATH_ENV=${SERVICE_PATH}
-
-WORKDIR /app/${SERVICE_PATH_ENV}
-
-CMD ["mvn", "spring-boot:run"]
-
-FROM base AS build
-COPY . .
-RUN mvn clean package -DskipTests -pl auth-service -am
-
+RUN mvn clean package -DskipTests -pl auth-service -am -B
 
 FROM eclipse-temurin:21-jre-jammy AS prod
 WORKDIR /app
+
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+USER appuser
+
 COPY --from=build /app/auth-service/target/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+ENTRYPOINT ["java", \
+  "-XX:+UseContainerSupport", \
+  "-XX:MaxRAMPercentage=75.0", \
+  "-Djava.security.egd=file:/dev/./urandom", \
+  "-jar", "app.jar"]

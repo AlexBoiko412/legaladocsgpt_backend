@@ -7,9 +7,5 @@ groq:
   api:
     key: ${GROQ_API_KEY}
 
-edit:
-  token:
-    secret: ${EDIT_TOKEN_SECRET}
-
 gotenberg:
   url: ${GOTENBERG_URL}

@@ -17,6 +17,9 @@ jobs:
   build-base:
     name: Build base image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout code

@@ -41,7 +41,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.base
-          push: ${{ github.ref == 'refs/heads/main' }}
+          push: true
           tags: ghcr.io/${{ steps.owner.outputs.name }}/legaldocsgpt-base:latest
           cache-from: type=gha,scope=base
           cache-to: type=gha,mode=max,scope=base

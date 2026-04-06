@@ -1,4 +1,5 @@
-FROM legaldocsgpt-base:latest AS build
+ARG BASE_IMAGE=legaldocsgpt-base:latest
+FROM ${BASE_IMAGE} AS build
 WORKDIR /app
 
 COPY shared/src              ./shared/src

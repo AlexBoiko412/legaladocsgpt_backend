@@ -86,6 +86,8 @@ jobs:
           context: .
           file: ${{ matrix.service }}/Dockerfile
           target: prod
+          build-args: |
+            BASE_IMAGE=ghcr.io/${{ steps.owner.outputs.name }}/legaldocsgpt-base:latest
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: |
             ghcr.io/${{ steps.owner.outputs.name }}/legaldocsgpt-${{ matrix.service }}:latest

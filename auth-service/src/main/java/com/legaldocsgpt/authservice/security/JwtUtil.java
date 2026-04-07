@@ -36,6 +36,9 @@ public class JwtUtil {
     }
 
     public UserTokenInfo validateToken(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)

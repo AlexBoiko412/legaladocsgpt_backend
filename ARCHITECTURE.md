@@ -8,6 +8,8 @@ This document explains *why* the system is built the way it is - the tradeoffs, 
 
 LegaldocsGPT is a Java 21 / Spring Boot 3.4 backend structured as a set of focused microservices behind a single API Gateway. The frontend is a Next.js 16 app that talks exclusively to the gateway.
 
+<img width="800" alt="diagram_arch_" src="https://github.com/user-attachments/assets/9dca6918-e299-41a2-bae2-880b0c3da1ab" />
+
 
 ---
 

@@ -25,6 +25,7 @@ A user picks a legal template (employment contract, NDA, service agreement…), 
 
 ## Architecture
 
+<img width="800" alt="diagram_arch_" src="https://github.com/user-attachments/assets/4c23278d-381c-40ce-80e5-0d989d1e94dd" />
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions and tradeoff explanations.
 

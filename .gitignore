@@ -33,7 +33,6 @@ docker-compose*.yml.bak
 *.iml
 *.ipr
 *.iws
-*.md
 .vscode/
 *.code-workspace
 

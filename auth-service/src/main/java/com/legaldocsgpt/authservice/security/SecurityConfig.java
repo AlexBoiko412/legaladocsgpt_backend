@@ -62,6 +62,8 @@ public class SecurityConfig {
                                 "/validate",
                                 "/me",
                                 "/oauth2/**",
+                                "/forgot-password",
+                                "/reset-password",
                                 "/actuator/**"
                         )
                         .permitAll()

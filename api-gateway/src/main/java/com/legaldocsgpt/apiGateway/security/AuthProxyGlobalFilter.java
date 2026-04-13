@@ -101,6 +101,9 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         return path.contains("/api/auth/login") ||
                 path.contains("/api/auth/signup") ||
                 path.contains("/api/auth/oauth2/") ||
+                path.contains("/api/auth/logout") ||
+                path.contains("/api/auth/forgot-password") ||
+                path.contains("/api/auth/reset-password") ||
                 path.contains("/api/storage/download-editing") ||
                 path.contains("/api/storage/callback");
     }

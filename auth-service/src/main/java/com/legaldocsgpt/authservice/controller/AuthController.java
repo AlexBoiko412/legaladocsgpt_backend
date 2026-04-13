@@ -43,7 +43,6 @@ public class AuthController {
         cookie.setMaxAge(0);
         cookie.setSecure(false);
         cookie.setAttribute("SameSite", "Strict");
-
         response.addCookie(cookie);
         return ResponseEntity.ok().build();
     }
@@ -80,20 +79,28 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request.getEmail());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok().build();
+    }
+
 
     private void addTokenCookie(HttpServletResponse response, String token) {
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         cookie.setPath("/");
         cookie.setMaxAge(24000);
-        //
         cookie.setSecure(false);
-        //
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
     }
-
-
 
 
     @Data
@@ -101,5 +108,16 @@ public class AuthController {
         private String username;
         private String email;
         private String password;
+    }
+
+    @Data
+    public static class ForgotPasswordRequest {
+        private String email;
+    }
+
+    @Data
+    public static class ResetPasswordRequest {
+        private String token;
+        private String newPassword;
     }
 }

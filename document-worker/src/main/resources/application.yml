@@ -1,0 +1,11 @@
+ai:
+  provider: ${AI_PROVIDER}
+openai:
+  api:
+    key: ${OPENAI_API_KEY}
+groq:
+  api:
+    key: ${GROQ_API_KEY}
+
+gotenberg:
+  url: ${GOTENBERG_URL}

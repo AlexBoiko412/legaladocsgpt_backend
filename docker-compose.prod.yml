@@ -1,0 +1,234 @@
+services:
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+      target: prod
+    image: ${REGISTRY:-ghcr.io/YOUR_ORG}/legaldocsgpt-auth-service:${IMAGE_TAG:-latest}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+      target: prod
+    image: ${REGISTRY:-ghcr.io/YOUR_ORG}/legaldocsgpt-api-gateway:${IMAGE_TAG:-latest}
+    ports:
+      - "8080:8080"
+    environment:
+      ONLYOFFICE_JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      document-generator:
+        condition: service_healthy
+      template-service:
+        condition: service_healthy
+      storage-service:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+  document-generator:
+    build:
+      context: .
+      dockerfile: document-generator/Dockerfile
+      target: prod
+    image: ${REGISTRY:-ghcr.io/YOUR_ORG}/legaldocsgpt-document-generator:${IMAGE_TAG:-latest}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      EDIT_TOKEN_SECRET: ${EDIT_TOKEN_SECRET}
+      ONLYOFFICE_JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+      ONLYOFFICE_INTERNAL_URL: http://onlyoffice-ds:80
+      STORAGE_SERVICE_URL: http://storage-service:8084
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      document-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      storage-service:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+        reservations:
+          memory: 384m
+
+  document-worker:
+    build:
+      context: .
+      dockerfile: document-worker/Dockerfile
+      target: prod
+    image: ${REGISTRY:-ghcr.io/YOUR_ORG}/legaldocsgpt-document-worker:${IMAGE_TAG:-latest}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_REGION: us-east-1
+      S3_BUCKET: legaldocs
+      GOTENBERG_URL: http://gotenberg:3000
+      STORAGE_SERVICE_URL: http://storage-service:8084
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      document-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+
+  storage-service:
+    build:
+      context: .
+      dockerfile: storage-service/Dockerfile
+      target: prod
+    image: ${REGISTRY:-ghcr.io/YOUR_ORG}/legaldocsgpt-storage-service:${IMAGE_TAG:-latest}
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_REGION: us-east-1
+      S3_BUCKET: legaldocs
+      EDIT_TOKEN_SECRET: ${EDIT_TOKEN_SECRET}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+  template-service:
+    build:
+      context: .
+      dockerfile: template-service/Dockerfile
+      target: prod
+    image: ${REGISTRY:-ghcr.io/YOUR_ORG}/legaldocsgpt-template-service:${IMAGE_TAG:-latest}
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://template-db:27017/templates_db
+      SPRING_DATA_REDIS_HOST: redis
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_REGION: us-east-1
+      S3_BUCKET: legaldocs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      template-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - database
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+  onlyoffice-ds:
+    ports:
+      - "8089:80"
+
+  minio:
+    ports:
+      - "9000:9000"

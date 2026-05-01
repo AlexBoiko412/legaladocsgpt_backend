@@ -1,0 +1,38 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: document-generator
+
+  datasource:
+    url: jdbc:postgresql://document-db:5432/document_db
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+
+edit:
+  token:
+    secret: ${EDIT_TOKEN_SECRET}
+
+
+onlyoffice:
+  internal-url: ${ONLYOFFICE_INTERNAL_URL:http://onlyoffice-ds:80}
+  jwt:
+    secret: ${ONLYOFFICE_JWT_SECRET}
+
+storage:
+  service:
+    url: ${STORAGE_SERVICE_URL:http://storage-service:8084}

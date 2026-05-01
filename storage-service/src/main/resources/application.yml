@@ -1,0 +1,17 @@
+server:
+  port: 8084
+spring:
+  application:
+    name: storage-service
+
+aws:
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    access-key: ${S3_ACCESS_KEY}
+    secret-key: ${S3_SECRET_KEY}
+    region: ${S3_REGION:us-east-1}
+    bucket-name: ${S3_BUCKET:legaldocs}
+
+edit:
+  token:
+    secret: ${EDIT_TOKEN_SECRET}

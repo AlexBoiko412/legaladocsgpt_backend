@@ -1,0 +1,9 @@
+FROM maven:3.9.9-eclipse-temurin-21
+WORKDIR /app
+
+ARG SERVICE_PATH
+ENV SERVICE_PATH_ENV=${SERVICE_PATH}
+
+WORKDIR /app/${SERVICE_PATH_ENV}
+
+CMD ["mvn", "spring-boot:run"]

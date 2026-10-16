@@ -1,0 +1,301 @@
+# Single-host deployment behind Caddy: / -> frontend, /api -> gateway, /onlyoffice -> editor.
+# See docs/DEPLOY.md. Sized for a 12 GB machine.
+name: legaldocs
+
+x-java-service: &java-service
+  restart: unless-stopped
+  networks: [backend, database]
+  deploy:
+    resources:
+      limits:
+        memory: 512m
+
+x-java-healthcheck: &java-healthcheck
+  interval: 20s
+  timeout: 5s
+  retries: 15
+  start_period: 90s
+
+volumes:
+  auth_db_data:
+  document_db_data:
+  mongo_data:
+  redis_data:
+  minio_data:
+  rabbitmq_data:
+  onlyoffice_data:
+  onlyoffice_logs:
+  caddy_data:
+  caddy_config:
+
+networks:
+  backend:
+  database:
+    internal: true
+
+services:
+  # Edge
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      # set SITE_ADDRESS=:80 when TLS is terminated elsewhere (e.g. Cloudflare Tunnel)
+      SITE_ADDRESS: ${SITE_ADDRESS:-${DOMAIN}}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [frontend, api-gateway]
+    networks: [backend]
+
+  frontend:
+    build:
+      context: ${FRONTEND_PATH:-../frontend}
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        NEXT_PUBLIC_ONLYOFFICE_URL: https://${DOMAIN}/onlyoffice/
+        NEXT_PUBLIC_SITE_URL: https://${DOMAIN}
+        NEXT_PUBLIC_GOOGLE_AUTH_ENABLED: ${GOOGLE_AUTH_ENABLED:-false}
+        NEXT_PUBLIC_DEMO_EMAIL: ${DEMO_EMAIL:-}
+        NEXT_PUBLIC_DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    restart: unless-stopped
+    environment:
+      API_URL: http://api-gateway:8080
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    networks: [backend]
+
+  # Java services
+  api-gateway:
+    <<: *java-service
+    build: { context: ., dockerfile: Dockerfile.prod, target: api-gateway }
+    environment:
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+    healthcheck: { <<: *java-healthcheck, test: ["CMD", "curl", "-fs", "http://localhost:8080/actuator/health"] }
+    depends_on:
+      auth-service: { condition: service_healthy }
+      document-generator: { condition: service_healthy }
+      template-service: { condition: service_healthy }
+      storage-service: { condition: service_healthy }
+    networks: [backend]
+
+  auth-service:
+    <<: *java-service
+    build: { context: ., dockerfile: Dockerfile.prod, target: auth-service }
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      COOKIE_SECURE: "true"
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-not-configured}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-not-configured}
+      GOOGLE_REDIRECT_URI: https://${DOMAIN}/api/auth/login/oauth2/code/google
+      OAUTH2_SUCCESS_REDIRECT: https://${DOMAIN}/oauth2/success
+      SITE_URL: https://${DOMAIN}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      DEMO_EMAIL: ${DEMO_EMAIL:-}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      MAIL_HOST: ${MAIL_HOST:-localhost}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
+      MAIL_FROM: ${MAIL_FROM:-LegaldocsGPT <noreply@example.com>}
+    healthcheck: { <<: *java-healthcheck, test: ["CMD", "curl", "-fs", "http://localhost:8081/actuator/health"] }
+    depends_on:
+      auth-db: { condition: service_healthy }
+
+  document-generator:
+    <<: *java-service
+    build: { context: ., dockerfile: Dockerfile.prod, target: document-generator }
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EDIT_TOKEN_SECRET: ${EDIT_TOKEN_SECRET}
+      ONLYOFFICE_JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+      ONLYOFFICE_INTERNAL_URL: http://onlyoffice-ds:80
+      STORAGE_SERVICE_URL: http://storage-service:8084
+    healthcheck: { <<: *java-healthcheck, test: ["CMD", "curl", "-fs", "http://localhost:8082/actuator/health"] }
+    depends_on:
+      document-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      storage-service: { condition: service_healthy }
+
+  document-worker:
+    <<: *java-service
+    build: { context: ., dockerfile: Dockerfile.prod, target: document-worker }
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://document-db:5432/document_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      AI_MODEL: ${AI_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOTENBERG_URL: http://gotenberg:3000
+      STORAGE_SERVICE_URL: http://storage-service:8084
+    healthcheck: { <<: *java-healthcheck, test: ["CMD", "curl", "-fs", "http://localhost:8085/actuator/health"] }
+    depends_on:
+      document-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      storage-service: { condition: service_healthy }
+
+  storage-service:
+    <<: *java-service
+    build: { context: ., dockerfile: Dockerfile.prod, target: storage-service }
+    environment:
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_REGION: us-east-1
+      S3_BUCKET: legaldocs
+      EDIT_TOKEN_SECRET: ${EDIT_TOKEN_SECRET}
+      ONLYOFFICE_PUBLIC_URL: https://${DOMAIN}/onlyoffice
+      ONLYOFFICE_INTERNAL_URL: http://onlyoffice-ds:80
+    healthcheck: { <<: *java-healthcheck, test: ["CMD", "curl", "-fs", "http://localhost:8084/actuator/health"] }
+    depends_on:
+      minio: { condition: service_healthy }
+    networks: [backend]
+
+  template-service:
+    <<: *java-service
+    build: { context: ., dockerfile: Dockerfile.prod, target: template-service }
+    environment:
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      SPRING_DATA_MONGODB_URI: mongodb://template-db:27017/templates_db
+      SPRING_DATA_REDIS_HOST: redis
+    healthcheck: { <<: *java-healthcheck, test: ["CMD", "curl", "-fs", "http://localhost:8083/actuator/health"] }
+    depends_on:
+      template-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      storage-service: { condition: service_healthy }
+
+  # Infrastructure
+  auth-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [auth_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [database]
+
+  document-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: document_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [document_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d document_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [database]
+
+  template-db:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["--wiredTigerCacheSizeGB", "0.25"]
+    volumes: [mongo_data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [database]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [database]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes: [minio_data:/data]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks: [backend]
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    networks: [backend]
+
+  onlyoffice-ds:
+    image: onlyoffice/documentserver:latest
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_logs:/var/log/onlyoffice
+    deploy:
+      resources:
+        limits:
+          memory: 2560m
+    networks: [backend]

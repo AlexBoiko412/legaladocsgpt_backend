@@ -22,7 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -173,22 +172,32 @@ public class DocumentService {
         }
     }
 
-    @Async
+    // give OnlyOffice time to force-save before the worker reads the file
+    private static final java.util.concurrent.Executor FORCE_SAVE_DELAY =
+            java.util.concurrent.CompletableFuture.delayedExecutor(3, java.util.concurrent.TimeUnit.SECONDS);
+
     public void triggerForceSaveAndPublishFinalize(String jobId, String userId, String refinementPrompt) {
         requestOnlyOfficeForceSave(jobId);
-        try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
-        DocumentFinalizeEvent event = new DocumentFinalizeEvent(jobId, userId, refinementPrompt);
-        rabbitTemplate.convertAndSend(SharedRabbitConfig.EXCHANGE_NAME,
-                SharedRabbitConfig.ROUTING_KEY, event);
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            DocumentFinalizeEvent event = new DocumentFinalizeEvent(jobId, userId, refinementPrompt);
+            rabbitTemplate.convertAndSend(SharedRabbitConfig.EXCHANGE_NAME,
+                    SharedRabbitConfig.ROUTING_KEY, event);
+        }, FORCE_SAVE_DELAY).exceptionally(ex -> {
+            log.error("Failed to publish finalize event for job {}: {}", jobId, ex.getMessage());
+            return null;
+        });
     }
 
-    @Async
     public void triggerForceSaveAndPublishConvert(String jobId, String userId) {
         requestOnlyOfficeForceSave(jobId);
-        try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
-        DocumentConvertEvent event = new DocumentConvertEvent(jobId, userId);
-        rabbitTemplate.convertAndSend(SharedRabbitConfig.EXCHANGE_NAME,
-                SharedRabbitConfig.CONVERT_ROUTING_KEY, event);
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            DocumentConvertEvent event = new DocumentConvertEvent(jobId, userId);
+            rabbitTemplate.convertAndSend(SharedRabbitConfig.EXCHANGE_NAME,
+                    SharedRabbitConfig.CONVERT_ROUTING_KEY, event);
+        }, FORCE_SAVE_DELAY).exceptionally(ex -> {
+            log.error("Failed to publish convert event for job {}: {}", jobId, ex.getMessage());
+            return null;
+        });
     }
 
     public JobStatusResponse getJobStatus(String jobId) {
@@ -284,6 +293,7 @@ public class DocumentService {
                         .content(v.getContent())
                         .docxKey(v.getDocxKey())
                         .createdAt(v.getCreatedAt())
+                        .refinementPrompt(v.getRefinementPrompt())
                         .build())
                 .toList();
     }

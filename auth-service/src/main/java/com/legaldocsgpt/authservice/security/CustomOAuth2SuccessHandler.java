@@ -21,13 +21,19 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
     private final String redirectUri;
+    private final boolean cookieSecure;
+    private final long jwtExpirationMs;
 
     public CustomOAuth2SuccessHandler(JwtUtil jwtUtil,
                                       UserRepository userRepository,
-                                      @Value("${app.oauth2.redirectUri}") String redirectUri) {
+                                      @Value("${app.oauth2.redirectUri}") String redirectUri,
+                                      @Value("${app.cookie.secure:false}") boolean cookieSecure,
+                                      @Value("${jwt.expiration}") long jwtExpirationMs) {
         this.jwtUtil = jwtUtil;
         this.userRepository = userRepository;
         this.redirectUri = redirectUri;
+        this.cookieSecure = cookieSecure;
+        this.jwtExpirationMs = jwtExpirationMs;
     }
 
     @Override
@@ -46,8 +52,10 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         cookie.setPath("/");
-        cookie.setMaxAge(3600000);
-        cookie.setAttribute("SameSite", "Strict");
+        cookie.setMaxAge((int) (jwtExpirationMs / 1000));
+        cookie.setSecure(cookieSecure);
+        // Lax: set at the end of the redirect chain from Google
+        cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
 
         response.sendRedirect(redirectUri);

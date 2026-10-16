@@ -36,6 +36,13 @@ public class AuthService {
             throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT, "Username too short");
         }
 
+        if (email == null || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT, "A valid email is required");
+        }
+        if (password == null || password.length() < 8) {
+            throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT, "Password must be at least 8 characters");
+        }
+
         if (userRepository.existsByUsername(username)) {
             throw new UserAlreadyExistsException("A user with this username already exists");
         }
@@ -49,6 +56,7 @@ public class AuthService {
                 .email(email)
                 .password(passwordEncoder.encode(password))
                 .role("ROLE_USER")
+                .provider("LOCAL")
                 .build();
 
         user = userRepository.save(user);
@@ -114,7 +122,8 @@ public class AuthService {
         User user = userRepository.findByEmail(info.getEmail())
                 .orElseThrow(UserNotFoundException::new);
 
-        if (!"LOCAL".equals(user.getProvider())) {
+        // null provider = older local account
+        if (user.getProvider() != null && !"LOCAL".equals(user.getProvider())) {
             throw new InvalidInputException(GlobalErrorCode.INVALID_INPUT,
                     "Password cannot be changed for Google accounts");
         }

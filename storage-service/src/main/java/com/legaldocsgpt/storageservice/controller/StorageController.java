@@ -24,6 +24,12 @@ public class StorageController {
     private final EditTokenService editTokenService;
     private final DocumentJobClient documentJobClient;
 
+    @org.springframework.beans.factory.annotation.Value("${onlyoffice.public-url:}")
+    private String onlyOfficePublicUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${onlyoffice.internal-url:http://onlyoffice-ds:80}")
+    private String onlyOfficeInternalUrl;
+
     @GetMapping("/{jobId}.pdf")
     public ResponseEntity<byte[]> downloadPdf(@PathVariable String jobId) {
         return storageService.downloadPdf(jobId);
@@ -131,8 +137,14 @@ public class StorageController {
 
     private void downloadAndSaveEditedFile(String jobId, String downloadUrl) {
         try {
-            String internalUrl = downloadUrl.replace("localhost:8089", "onlyoffice-ds:80")
-                    .replace("localhost", "onlyoffice-ds");
+            String internalUrl = downloadUrl;
+            String publicBase = onlyOfficePublicUrl == null ? "" : onlyOfficePublicUrl.replaceAll("/+$", "");
+            if (!publicBase.isEmpty() && internalUrl.startsWith(publicBase)) {
+                internalUrl = onlyOfficeInternalUrl.replaceAll("/+$", "") + internalUrl.substring(publicBase.length());
+            } else {
+                internalUrl = internalUrl.replace("localhost:8089", "onlyoffice-ds:80")
+                        .replace("localhost", "onlyoffice-ds");
+            }
 
             log.info("Downloading updated DOCX for job {} from internal URL: {}", jobId, internalUrl);
 

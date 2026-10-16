@@ -15,3 +15,7 @@ aws:
 edit:
   token:
     secret: ${EDIT_TOKEN_SECRET}
+
+onlyoffice:
+  public-url: ${ONLYOFFICE_PUBLIC_URL:}
+  internal-url: ${ONLYOFFICE_INTERNAL_URL:http://onlyoffice-ds:80}

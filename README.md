@@ -2,11 +2,13 @@
 
 > AI-powered legal document platform. Pick a template, describe your situation, and get a fully structured Word/PDF document in under a minute - with a built-in editor and version history.
 
-![CI](https://github.com/YOUR_USERNAME/legaldocsgpt_backend/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/AlexBoiko412/legaladocsgpt_backend/actions/workflows/ci.yml/badge.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-brightgreen?logo=springboot)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+
+> **Live demo:** _add your link here after deploying_. Click **Try the demo account** on the login page (no sign-up needed).
 
 ---
 
@@ -19,7 +21,7 @@ A user picks a legal template (employment contract, NDA, service agreement…), 
 3. The finished `.docx` is stored in MinIO; Gotenberg converts it to PDF
 4. The user gets an in-browser OnlyOffice editor, version history, and one-click PDF download
 
-> **Frontend repo:** [legaldocsgpt_frontend](https://github.com/YOUR_USERNAME/legaldocsgpt_frontend) - Next.js 16, TypeScript, Tailwind
+> **Frontend repo:** [legaldocsgpt_frontend](https://github.com/AlexBoiko412/legaladocsgpt_frontend) - Next.js 16, TypeScript, Tailwind
 
 ---
 
@@ -54,7 +56,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions and tradeo
 **Prerequisites:** Docker Desktop, an OpenAI or Groq API key (free tier works)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/legaldocsgpt_backend.git
+git clone https://github.com/AlexBoiko412/legaladocsgpt_backend.git
 cd legaldocsgpt_backend
 
 cp .env.example .env
@@ -75,6 +77,20 @@ The stack takes ~60 seconds to initialize on first run (Maven builds inside Dock
 | MailHog (email) | http://localhost:8025 |
 
 **Default admin account:** `admin` / `admin123`
+
+---
+
+## Deploying (free)
+
+The whole platform (6 Spring Boot services, Postgres ×2, MongoDB, Redis, RabbitMQ, MinIO, Gotenberg, OnlyOffice and the Next.js frontend) runs on **one 12 GB machine** behind Caddy with automatic HTTPS, so it fits Oracle Cloud's Always Free tier.
+
+```bash
+# on a fresh Ubuntu server
+git clone https://github.com/AlexBoiko412/legaladocsgpt_backend.git ~/legaldocs/backend
+bash ~/legaldocs/backend/deploy/setup-server.sh <your-domain> <groq-api-key>
+```
+
+Step-by-step guide: [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ---
 
@@ -103,10 +119,13 @@ legaldocsgpt_backend/
 ├── document-worker/         # RabbitMQ consumer - AI generation + docx assembly + PDF
 ├── template-service/        # Template CRUD, admin upload, MongoDB + Redis cache
 ├── storage-service/         # MinIO wrapper - upload, download, OnlyOffice callbacks
-├── docs/                    # Architecture docs, API reference
+├── docs/                    # Architecture, API reference, deployment guide
+├── deploy/                  # Caddyfile, env template, one-shot server setup script
 ├── docker-compose.yml       # Base infrastructure
 ├── docker-compose.override.yml  # Dev overrides (ports, hot reload)
+├── docker-compose.deploy.yml    # Single-host production stack (Caddy + HTTPS)
 ├── Dockerfile.base          # Shared Maven build cache layer
+├── Dockerfile.prod          # Multi-target image build for all services
 └── .github/workflows/ci.yml # Test → Build → Push pipeline
 ```
 
@@ -129,3 +148,4 @@ Full explanations in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - [API Reference](docs/API.md)
 - [Local Development Guide](docs/DEVELOPMENT.md)
 - [Service Descriptions](docs/SERVICES.md)
+- [Deployment Guide](docs/DEPLOY.md)

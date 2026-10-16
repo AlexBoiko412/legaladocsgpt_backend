@@ -4,7 +4,13 @@ server:
 
 app:
   oauth2:
-    redirectUri: http://localhost:3000/oauth2/success
+    redirectUri: ${OAUTH2_SUCCESS_REDIRECT:http://localhost:3000/oauth2/success}
+  cookie:
+    secure: ${COOKIE_SECURE:false}
+  seed:
+    admin-password: ${ADMIN_PASSWORD:admin123}
+    demo-email: ${DEMO_EMAIL:}
+    demo-password: ${DEMO_PASSWORD:}
   site-url: ${SITE_URL:http://localhost:3000}
   mail:
     from: ${MAIL_FROM:LegaldocsGPT <noreply@legaldocsgpt.com>}
@@ -20,7 +26,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: ${SHOW_SQL:false}
     open-in-view: false
     properties:
       hibernate:
@@ -30,12 +36,12 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID}
-            client-secret: ${GOOGLE_CLIENT_SECRET}
+            client-id: ${GOOGLE_CLIENT_ID:not-configured}
+            client-secret: ${GOOGLE_CLIENT_SECRET:not-configured}
             scope:
               - email
               - profile
-            redirect-uri: http://localhost:8080/api/auth/login/oauth2/code/google
+            redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8080/api/auth/login/oauth2/code/google}
         provider:
           google:
             authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
@@ -56,11 +62,11 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
-  expiration: ${JWT_EXPIRATION}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 logging:
   level:
-    org.springframework.security: DEBUG
-    org.springframework.web: DEBUG
-    com.legaldocsgpt: DEBUG
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
+    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
+    com.legaldocsgpt: ${LOG_LEVEL_APP:INFO}
     root: INFO

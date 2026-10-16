@@ -91,6 +91,32 @@ class AuthServiceTest {
             // Verify ROLE_USER was passed to generateToken, not ROLE_ADMIN
             verify(jwtUtil).generateToken("alice", "alice@example.com", "ROLE_USER");
         }
+
+        @Test
+        void shouldMarkNewAccountsAsLocalProvider() {
+            when(userRepository.existsByUsername(any())).thenReturn(false);
+            when(userRepository.existsByEmail(any())).thenReturn(false);
+            when(passwordEncoder.encode(any())).thenReturn("hashed");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            authService.signup("alice", "alice@example.com", "password123");
+
+            verify(userRepository).save(argThat(u -> "LOCAL".equals(u.getProvider())));
+        }
+
+        @Test
+        void shouldRejectInvalidEmail() {
+            assertThatThrownBy(() -> authService.signup("alice", "not-an-email", "password123"))
+                    .isInstanceOf(InvalidInputException.class)
+                    .hasMessageContaining("email");
+        }
+
+        @Test
+        void shouldRejectShortPassword() {
+            assertThatThrownBy(() -> authService.signup("alice", "alice@example.com", "short"))
+                    .isInstanceOf(InvalidInputException.class)
+                    .hasMessageContaining("8 characters");
+        }
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -203,6 +229,24 @@ class AuthServiceTest {
                     authService.changePassword("valid-token", "oldpassword", "short"))
                     .isInstanceOf(InvalidInputException.class)
                     .hasMessageContaining("8 characters");
+        }
+
+        @Test
+        void shouldAllowLegacyLocalAccountWithNullProvider() {
+            User legacy = User.builder()
+                    .username("alice")
+                    .email("alice@example.com")
+                    .password("old-hashed")
+                    .role("ROLE_USER")
+                    .provider(null)
+                    .build();
+            when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(legacy));
+            when(passwordEncoder.matches("oldpassword", "old-hashed")).thenReturn(true);
+            when(passwordEncoder.encode("newpassword123")).thenReturn("new-hashed");
+
+            authService.changePassword("valid-token", "oldpassword", "newpassword123");
+
+            verify(userRepository).save(argThat(u -> u.getPassword().equals("new-hashed")));
         }
 
         @Test

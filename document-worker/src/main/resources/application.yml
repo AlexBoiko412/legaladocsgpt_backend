@@ -1,5 +1,10 @@
+server:
+  port: 8085
+
 ai:
-  provider: ${AI_PROVIDER}
+  provider: ${AI_PROVIDER:groq}
+  model: ${AI_MODEL:}
+  timeout-seconds: ${AI_TIMEOUT_SECONDS:120}
 openai:
   api:
     key: ${OPENAI_API_KEY}

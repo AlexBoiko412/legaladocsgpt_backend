@@ -44,13 +44,26 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
 
-        if (isWhitelisted(path)) {
-            return chain.filter(exchange);
+        if (isInternalOnly(path)) {
+            exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.NOT_FOUND);
+            return exchange.getResponse().setComplete();
         }
 
-        var cookie = exchange.getRequest().getCookies().getFirst("token");
+        // identity headers may only be set by the gateway
+        ServerWebExchange sanitized = exchange.mutate()
+                .request(r -> r.headers(h -> {
+                    h.remove("X-User-Id");
+                    h.remove("X-User-Role");
+                }))
+                .build();
+
+        if (isWhitelisted(path)) {
+            return chain.filter(sanitized);
+        }
+
+        var cookie = sanitized.getRequest().getCookies().getFirst("token");
         if (cookie == null || cookie.getValue().isEmpty()) {
-            return handleUnauthorized(exchange, GlobalErrorCode.UNAUTHORIZED);
+            return handleUnauthorized(sanitized, GlobalErrorCode.UNAUTHORIZED);
         }
 
         String token = cookie.getValue();
@@ -58,35 +71,38 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
         UserInfoResponseDto cachedUser = tokenCache.getIfPresent(token);
         if (cachedUser != null) {
             log.debug("Token cache hit for user {}", cachedUser.getId());
-            if (isAdminPath(path) && !isAdmin(cachedUser)) {
-                return handleForbidden(exchange);
-            }
-
-            return chain.filter(withUserHeader(exchange, cachedUser));
+            return proceed(sanitized, chain, path, cachedUser);
         }
 
+        // only a failed /validate call means 401; downstream errors pass through as-is
         return webClient.get()
                 .uri("/validate")
                 .header(HttpHeaders.COOKIE, "token=" + token)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Invalid Token")))
-                .toEntity(UserInfoResponseDto.class)
-                .flatMap(response -> {
-                    UserInfoResponseDto user = response.getBody();
-                    if (user == null || user.getId() == null) {
-                        return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
-                    }
-                    tokenCache.put(token, user);
-                    if (isAdminPath(path) && !isAdmin(user)) {
-                        return handleForbidden(exchange);
-                    }
-                    return chain.filter(withUserHeader(exchange, user));
-                })
+                .bodyToMono(UserInfoResponseDto.class)
+                .map(u -> java.util.Optional.of(u))
                 .onErrorResume(err -> {
                     log.warn("Token validation failed: {}", err.getMessage());
                     tokenCache.invalidate(token);
-                    return handleUnauthorized(exchange, GlobalErrorCode.INVALID_TOKEN);
+                    return Mono.just(java.util.Optional.<UserInfoResponseDto>empty());
+                })
+                .defaultIfEmpty(java.util.Optional.<UserInfoResponseDto>empty())
+                .flatMap(maybeUser -> {
+                    UserInfoResponseDto user = maybeUser.orElse(null);
+                    if (user == null || user.getId() == null) {
+                        return handleUnauthorized(sanitized, GlobalErrorCode.INVALID_TOKEN);
+                    }
+                    tokenCache.put(token, user);
+                    return proceed(sanitized, chain, path, user);
                 });
+    }
+
+    private Mono<Void> proceed(ServerWebExchange exchange, GatewayFilterChain chain,
+                               String path, UserInfoResponseDto user) {
+        if (isAdminPath(path) && !isAdmin(user)) {
+            return handleForbidden(exchange);
+        }
+        return chain.filter(withUserHeader(exchange, user));
     }
 
     private ServerWebExchange withUserHeader(ServerWebExchange exchange, UserInfoResponseDto user) {
@@ -98,14 +114,28 @@ public class AuthProxyGlobalFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isWhitelisted(String path) {
-        return path.contains("/api/auth/login") ||
-                path.contains("/api/auth/signup") ||
-                path.contains("/api/auth/oauth2/") ||
-                path.contains("/api/auth/logout") ||
-                path.contains("/api/auth/forgot-password") ||
-                path.contains("/api/auth/reset-password") ||
-                path.contains("/api/storage/download-editing") ||
-                path.contains("/api/storage/callback");
+        return path.equals("/api/auth/login") ||
+                path.equals("/api/auth/signup") ||
+                path.equals("/api/auth/logout") ||
+                path.equals("/api/auth/forgot-password") ||
+                path.equals("/api/auth/reset-password") ||
+                path.startsWith("/api/auth/oauth2/") ||
+                path.startsWith("/api/auth/login/oauth2/") ||
+                path.startsWith("/login/oauth2/") ||
+                path.equals("/api/storage/download-editing") ||
+                path.equals("/api/storage/callback") ||
+                path.startsWith("/actuator/health") ||
+                path.equals("/ping");
+    }
+
+    /** Endpoints meant only for calls between backend services. */
+    private boolean isInternalOnly(String path) {
+        return path.equals("/api/storage/upload-raw") ||
+                path.equals("/api/storage/delete-raw") ||
+                path.equals("/api/storage/download-internal") ||
+                (path.startsWith("/api/storage/") && path.endsWith(".pdf")) ||
+                path.equals("/api/documents/ownership") ||
+                path.endsWith("/status-silent");
     }
 
     private boolean isAdminPath(String path) {

@@ -1,5 +1,6 @@
 package com.legaldocsgpt.apiGateway.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 
 import org.springframework.context.annotation.Configuration;
@@ -13,9 +14,14 @@ import java.util.List;
 public class CorsGlobalConfig {
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins:http://localhost:3000}") String allowedOrigins) {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        corsConfig.setAllowedOriginPatterns(List.of("http://localhost:3000"));
+        corsConfig.setAllowedOriginPatterns(
+                java.util.Arrays.stream(allowedOrigins.split(","))
+                        .map(String::trim)
+                        .filter(o -> !o.isEmpty())
+                        .toList());
         corsConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         corsConfig.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         corsConfig.setAllowCredentials(true);

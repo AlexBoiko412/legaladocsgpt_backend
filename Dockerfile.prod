@@ -1,0 +1,57 @@
+# Builds all services once; each --target is a small JRE image with one jar.
+#   docker build -f Dockerfile.prod --target auth-service .
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+WORKDIR /app
+
+# dependencies first for better layer caching
+COPY pom.xml .
+COPY shared/pom.xml             shared/
+COPY api-gateway/pom.xml        api-gateway/
+COPY auth-service/pom.xml       auth-service/
+COPY document-generator/pom.xml document-generator/
+COPY document-worker/pom.xml    document-worker/
+COPY storage-service/pom.xml    storage-service/
+COPY template-service/pom.xml   template-service/
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline -DexcludeReactor=true || true
+
+COPY shared/src             shared/src
+COPY api-gateway/src        api-gateway/src
+COPY auth-service/src       auth-service/src
+COPY document-generator/src document-generator/src
+COPY document-worker/src    document-worker/src
+COPY storage-service/src    storage-service/src
+COPY template-service/src   template-service/src
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q -DskipTests package \
+ && mkdir -p /jars \
+ && for m in api-gateway auth-service document-generator document-worker storage-service template-service; do \
+      cp $m/target/$m-*.jar /jars/$m.jar; \
+    done
+
+# curl is used by the compose healthchecks
+FROM eclipse-temurin:21-jre AS runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -r app && useradd -r -g app app
+WORKDIR /app
+USER app
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=60 -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xss512k -XX:+ExitOnOutOfMemoryError"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+
+FROM runtime AS api-gateway
+COPY --from=build /jars/api-gateway.jar /app/app.jar
+
+FROM runtime AS auth-service
+COPY --from=build /jars/auth-service.jar /app/app.jar
+
+FROM runtime AS document-generator
+COPY --from=build /jars/document-generator.jar /app/app.jar
+
+FROM runtime AS document-worker
+COPY --from=build /jars/document-worker.jar /app/app.jar
+
+FROM runtime AS storage-service
+COPY --from=build /jars/storage-service.jar /app/app.jar
+
+FROM runtime AS template-service
+COPY --from=build /jars/template-service.jar /app/app.jar

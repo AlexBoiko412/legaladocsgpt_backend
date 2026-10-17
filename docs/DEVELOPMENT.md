@@ -13,7 +13,7 @@
 ## First-Time Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/legaldocsgpt_backend.git
+git clone https://github.com/AlexBoiko412/legaladocsgpt_backend.git
 cd legaldocsgpt_backend
 
 # Copy the example env file
@@ -63,7 +63,7 @@ docker compose ps   # all should show "healthy"
 The frontend is a separate repo:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/legaldocsgpt_frontend.git
+git clone https://github.com/AlexBoiko412/legaladocsgpt_frontend.git
 cd legaldocsgpt_frontend
 
 cp .env.example .env.local

@@ -18,12 +18,15 @@ public class OpenAIProvider implements AIProvider {
     private final WebClient client;
     private final String model;
     private final String providerName;
+    private final java.time.Duration timeout;
 
     public OpenAIProvider(
             WebClient.Builder builder,
             @Value("${ai.provider}") String provider,
             @Value("${groq.api.key:}") String groqKey,
-            @Value("${openai.api.key:}") String openaiKey) {
+            @Value("${openai.api.key:}") String openaiKey,
+            @Value("${ai.model:}") String modelOverride,
+            @Value("${ai.timeout-seconds:120}") long timeoutSeconds) {
 
         String baseUrl;
         String apiKey;
@@ -31,17 +34,18 @@ public class OpenAIProvider implements AIProvider {
         if ("groq".equals(provider)) {
             baseUrl = "https://api.groq.com/openai/v1";
             apiKey = groqKey;
-            this.model = "llama-3.3-70b-versatile";
+            this.model = modelOverride.isBlank() ? "llama-3.3-70b-versatile" : modelOverride;
             this.providerName = "Groq";
             log.info("Using Groq Provider with model: {}", model);
         } else {
             baseUrl = "https://api.openai.com/v1";
             apiKey = openaiKey;
-            this.model = "gpt-4o-mini";
+            this.model = modelOverride.isBlank() ? "gpt-4o-mini" : modelOverride;
             this.providerName = "OpenAI";
             log.info("Using OpenAI Provider with model: {}", model);
         }
 
+        this.timeout = java.time.Duration.ofSeconds(timeoutSeconds);
         this.client = builder
                 .baseUrl(baseUrl)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
@@ -67,6 +71,12 @@ public class OpenAIProvider implements AIProvider {
                     Map message = (Map) firstChoice.get("message");
                     return (String) message.get("content");
                 })
+                .timeout(timeout)
+                .onErrorMap(org.springframework.web.reactive.function.client.WebClientResponseException.class,
+                        e -> {
+                            log.error("{} API error {}: {}", providerName, e.getStatusCode(), e.getResponseBodyAsString());
+                            return e;
+                        })
                 .block();
 
         return response;

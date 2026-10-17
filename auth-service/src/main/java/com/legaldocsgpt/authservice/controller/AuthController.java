@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,12 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+
+    @Value("${app.cookie.secure:false}")
+    private boolean cookieSecure;
+
+    @Value("${jwt.expiration}")
+    private long jwtExpirationMs;
 
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@RequestBody AuthRequest request, HttpServletResponse response) {
@@ -41,8 +48,8 @@ public class AuthController {
         cookie.setHttpOnly(true);
         cookie.setPath("/");
         cookie.setMaxAge(0);
-        cookie.setSecure(false);
-        cookie.setAttribute("SameSite", "Strict");
+        cookie.setSecure(cookieSecure);
+        cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
         return ResponseEntity.ok().build();
     }
@@ -96,9 +103,9 @@ public class AuthController {
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         cookie.setPath("/");
-        cookie.setMaxAge(24000);
-        cookie.setSecure(false);
-        cookie.setAttribute("SameSite", "Strict");
+        cookie.setMaxAge((int) (jwtExpirationMs / 1000));
+        cookie.setSecure(cookieSecure);
+        cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
     }
 
